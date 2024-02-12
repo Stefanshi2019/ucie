@@ -210,6 +210,10 @@ class SidebandMessageEncoder extends Module {
         val data0 = Input(Bits(32.W))
         val data1 = Input(Bits(32.W))
         val msgOut = Output(Bits(32.W))
+        val phase0Val = Output(Bool())
+        val phase1Val = Output(Bool())
+        val phase2Val = Output(Bool())
+        val phase3Val = Output(Bool())
         val done = Output(Bool())
     })
 
@@ -236,28 +240,43 @@ class SidebandMessageEncoder extends Module {
     val counter = RegInit(0.U(4.W))
     val msgOutReg = RegInit(0.U(32.W))
     val doneReg = RegInit(false.B)
+    val phase0ValReg = RegInit(false.B)
+    val phase1ValReg = RegInit(false.B)
+    val phase2ValReg = RegInit(false.B)
+    val phase3ValReg = RegInit(false.B)
     // When asked to send, and other side ready, start 
 
     io.done := doneReg
     io.msgOut := msgOutReg
+    io.phase0Val := phase0ValReg
+    io.phase1Val := phase1ValReg
+    io.phase2Val := phase2ValReg
+    io.phase3Val := phase3ValReg
 
     when(io.enable && io.ready){
         // send message
         when(counter === 0.U){
             msgOutReg := phase0
+            phase0ValReg := true.B
             counter := counter + 1.U
         }.elsewhen(counter === 1.U){
             msgOutReg := phase1
+            phase1ValReg := true.B
             counter := counter + 1.U
         }.elsewhen(counter === 2.U){
+            
+            // May's question: on p145 where is phases 2&3?
+            // Need to incorporate message types other than "message without data"?
             when(io.msgHeaderIn.opcode === PacketType.MessageWith64bData.asUInt){
+                msgOutReg := io.data0
+                phase2ValReg := true.B
                 counter := counter + 1.U
             }.otherwise{
                 doneReg := true.B
             }
-            msgOutReg := io.data0
         }.elsewhen(counter === 3.U){
             msgOutReg := io.data1
+            phase3ValReg := true.B
             counter := counter + 1.U
         }.otherwise{
             doneReg := true.B
@@ -266,6 +285,10 @@ class SidebandMessageEncoder extends Module {
     }.elsewhen(doneReg && !io.enable){
         doneReg := false.B
         counter := 0.U
+        phase0ValReg := false.B
+        phase1ValReg := false.B
+        phase2ValReg := false.B
+        phase3ValReg := false.B
     }
     
 }

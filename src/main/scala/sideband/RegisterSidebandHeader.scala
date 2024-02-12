@@ -38,7 +38,7 @@ class SidebandMessageHeader extends Bundle {
   val rsvd_01 = Bits(5.W)
   val msgCode = Bits(8.W)
   val rsvd_02 = Bits(9.W)
-  val opcode = Bits(5.W)
+  val opcode = Bits(5.W) // Type cast to PacketType?
   // Phase 1
   val dp = Bool()
   val cp = Bool()
