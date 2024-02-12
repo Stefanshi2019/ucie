@@ -49,6 +49,7 @@ class LogicalPhy(
                 (io.rdi.lpStateReq === PhyStateReq.nop, PhyState.reset),
                 (io.rdi.lpStateReq === PhyStateReq.l1, PhyState.l1),
                 (io.rdi.lpStateReq === PhyStateReq.l2, PhyState.l2),
+                //(Not applicable for CXL Flit Mode with Retry in the Adapter)
                 (io.rdi.lpStateReq === PhyStateReq.retrain, PhyState.retrain)
             ))
         }
@@ -80,6 +81,10 @@ class LogicalPhy(
             // 1. Valid framing errors are observed.
             // 2. Remote Physical Layer requests Retrain entry.
             // 3. Adapter requests Retrain
+
+            // TODO: inputs to be considered: 1. SW retrain bit 2. number of CRC errors 3. protocol layer request, raw only
+            // TODO: upon entering retrain, events:
+            // 1. Propagate retrain to all adapter LSMs 
             when(io.rdi.lpStateReq === PhyStateReq.active) {
                 nextState := PhyState.active
             }
@@ -111,7 +116,8 @@ class LogicalPhy(
     }
     // Following 3 states could be transitioned from any other states
     // Disabled and LinkError transition occurs also upon remote side band message request
-    // Implement later
+    // TODO: sideband conditioned transitions
+    // May's understanding: according to p224 priority should be LinkError>Disabled>LinkReset
     currentState := PriorityMux(Seq(
         (io.rdi.lpLinkError, PhyState.linkError),
         (io.rdi.lpStateReq === PhyStateReq.nop, PhyState.reset),
@@ -123,6 +129,7 @@ class LogicalPhy(
 
     // Sub-Actions Begin ------------------------------------------------------------------
     // For actions, refer to p250
+    // TODO: clock gating, power management
     def Transition_ResetToActive (): Unit = {
         // Can transition to active, l1, and l2
         // Only side band message (dest state) differs
