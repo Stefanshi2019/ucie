@@ -7,9 +7,7 @@ import interfaces._
 import sideband._
 import logphy._
 
-//
 
-// Testing only sender
 class dut2 (afeParams: AfeParams) extends Module{
     val io = IO(new Bundle{
         // sender 
@@ -53,21 +51,9 @@ class dut2 (afeParams: AfeParams) extends Module{
     // io.sbAfe.txData.irdy := io.sbAfe.txData.valid   
 }
 
-
-class receiver () extends Module{
-    val io = IO(new Bundle{
-        val ready = Input(Bool())
-        val in = Flipped(Decoupled3(Bits(32.W)))
-        val bits = Output(Bits(32.W))
-    })
-    io.in.ready := io.ready
-    printf(p"${io.in}\n")
-    io.bits := io.in.bits
-}
-
-class DummyModuleTest extends AnyFunSpec with ChiselScalatestTester {
+class SidebandMessageDecoderTest extends AnyFunSpec with ChiselScalatestTester {
   describe("DUT Module with Decoupled3 Interface") {
-    it("should properly transfer data from sender to receiver when ready and valid, without data") {
+     it("should properly transfer data from sender to receiver when ready and valid, with data") {
       test(
         new dut2(
           AfeParams()
@@ -77,103 +63,19 @@ class DummyModuleTest extends AnyFunSpec with ChiselScalatestTester {
         c.io.enable.poke(true.B)
         c.io.ready.poke(true.B)  // Example data to send
         
-        c.io.msgHeader.srcid.poke(1.U)
+        c.io.msgHeader.srcid.poke(SourceID.DieToDieAdapter)
         c.io.msgHeader.rsvd_00.poke(1.U)
         c.io.msgHeader.rsvd_01.poke(1.U)
-        c.io.msgHeader.msgCode.poke(1.U)
+        c.io.msgHeader.msgCode.poke(MsgCode.LinkMgmt_RDI_Req)
         c.io.msgHeader.rsvd_02.poke(1.U)
-        c.io.msgHeader.opcode.poke(1.U)
+        c.io.msgHeader.opcode.poke(Opcode.MessageWith64bData)
         // Phase 1
         c.io.msgHeader.dp.poke(1.U)
         c.io.msgHeader.cp.poke(1.U)
         c.io.msgHeader.rsvd_10.poke(1.U)
         c.io.msgHeader.dstid.poke(1.U)
-        c.io.msgHeader.msgInfo.poke(1.U)
-        c.io.msgHeader.msgSubCode.poke(1.U)
-        c.io.data0.poke(5.U)
-        c.io.data1.poke(9.U)
-        
-
-        // // Chisel testbench does not allow .asUInt
-        // c.io.msgHeader.srcid.poke(SourceID.DieToDieAdapter.asUInt)
-        // c.io.msgHeader.rsvd_00.poke(1.U)
-        // c.io.msgHeader.rsvd_01.poke(1.U)
-        // c.io.msgHeader.msgCode.poke(MsgCode.LinkMgmt_RDI_Req.asUInt)
-        // c.io.msgHeader.rsvd_02.poke(1.U)
-        // c.io.msgHeader.opcode.poke(Opcode.MessageWithoutData.asUInt)
-        // // Phase 1
-        // c.io.msgHeader.dp.poke(1.U)
-        // c.io.msgHeader.cp.poke(1.U)
-        // c.io.msgHeader.rsvd_10.poke(1.U)
-        // c.io.msgHeader.dstid.poke(1.U)
-        // c.io.msgHeader.msgInfo.poke(MsgInfo.RegularResponse.asUInt)
-        // c.io.msgHeader.msgSubCode.poke(MsgSubCode.Active.asUInt)
-        // c.io.data0.poke(5.U)
-        // c.io.data1.poke(9.U)
-
-        // Step the clock to observe the transfer
-        // do {
-        //   println(s"msgOut at phase 0: ${c.io.msgOut.peek().litValue}")
-        //   c.clock.step()
-        // } while ((c.io.phase.peek().litValue != 1.U) && (!c.io.done.peek().litToBoolean))
-
-        while (!c.io.phase0Val.peek().litToBoolean) {
-          c.clock.step()
-        }
-        println(s"msgOut at phase 0: ${c.io.msgOut.peek().litValue}")
-
-        while (!c.io.phase1Val.peek().litToBoolean) {
-          c.clock.step()
-        }
-        println(s"msgOut at phase 1: ${c.io.msgOut.peek().litValue}")
-
-        while (!c.io.done.peek().litToBoolean) {
-          c.clock.step()
-        }
-        c.io.phase2Val.expect(false.B)
-        c.io.phase3Val.expect(false.B)
-
-        // c.clock.step(1)
-        // println(s"msgOut: ${c.io.msgOut.peek().litValue}, done: ${c.io.done.peek().litToBoolean}")
-        // // c.io.msgOut.peek()
-        // // c.io.done.peek()
-        // c.clock.step(5)
-        // println(s"msgOut: ${c.io.msgOut.peek().litValue}, done: ${c.io.done.peek().litToBoolean}")
-
-        // // c.io.msgOut.peek()
-        // // c.io.done.peek()
-        // c.io.enable.poke(false.B)
-        // c.clock.step(1)
-        // println(s"msgOut: ${c.io.msgOut.peek().litValue}, done: ${c.io.done.peek().litToBoolean}")
-
-        // c.io.msgOut.peek()
-        // c.io.done.peek() 
-      }
-    }
-
-    it("should properly transfer data from sender to receiver when ready and valid, with data") {
-      test(
-        new dut2(
-          AfeParams()
-        )
-      ).withAnnotations(Seq(WriteVcdAnnotation)) { c =>
-        // Initialize inputs
-        c.io.enable.poke(true.B)
-        c.io.ready.poke(true.B)  // Example data to send
-        
-        c.io.msgHeader.srcid.poke(1.U)
-        c.io.msgHeader.rsvd_00.poke(1.U)
-        c.io.msgHeader.rsvd_01.poke(1.U)
-        c.io.msgHeader.msgCode.poke(1.U)
-        c.io.msgHeader.rsvd_02.poke(1.U)
-        c.io.msgHeader.opcode.poke(0x1b.U) //packet type=0x11011: MessageWith64bData
-        // Phase 1
-        c.io.msgHeader.dp.poke(1.U)
-        c.io.msgHeader.cp.poke(1.U)
-        c.io.msgHeader.rsvd_10.poke(1.U)
-        c.io.msgHeader.dstid.poke(1.U)
-        c.io.msgHeader.msgInfo.poke(1.U)
-        c.io.msgHeader.msgSubCode.poke(1.U)
+        c.io.msgHeader.msgInfo.poke(MsgInfo.ReturnCredit1)
+        c.io.msgHeader.msgSubCode.poke(MsgSubCode.Active)
         // data
         c.io.data0.poke(5.U)
         c.io.data1.poke(9.U)
@@ -193,10 +95,61 @@ class DummyModuleTest extends AnyFunSpec with ChiselScalatestTester {
         }
         println(s"msgOut at phase 2: ${c.io.msgOut.peek().litValue}")
 
+        c.io.phase2Val.expect(true.B)
+        c.io.msgOut.expect(5.U)
+
         while (!c.io.phase3Val.peek().litToBoolean) {
           c.clock.step()
         }
         println(s"msgOut at phase 3: ${c.io.msgOut.peek().litValue}")
+        c.io.phase3Val.expect(true.B)
+        c.io.msgOut.expect(9.U)
+      }
+    }
+
+
+    it("should properly transfer data from sender to receiver when ready and valid, without data") {
+      test(
+        new dut2(
+          AfeParams()
+        )
+      ).withAnnotations(Seq(WriteVcdAnnotation)) { c =>
+        // Initialize inputs
+        c.io.enable.poke(true.B)
+        c.io.ready.poke(true.B)  // Example data to send
+        
+        // Chisel testbench does not allow .asUInt
+        c.io.msgHeader.srcid.poke(SourceID.DieToDieAdapter)
+        c.io.msgHeader.rsvd_00.poke(1.U)
+        c.io.msgHeader.rsvd_01.poke(1.U)
+        c.io.msgHeader.msgCode.poke(MsgCode.LinkMgmt_RDI_Req)
+        c.io.msgHeader.rsvd_02.poke(1.U)
+        c.io.msgHeader.opcode.poke(Opcode.MessageWithoutData)
+        // Phase 1
+        c.io.msgHeader.dp.poke(1.U)
+        c.io.msgHeader.cp.poke(1.U)
+        c.io.msgHeader.rsvd_10.poke(1.U)
+        c.io.msgHeader.dstid.poke(1.U)
+        c.io.msgHeader.msgInfo.poke(MsgInfo.RegularResponse)
+        c.io.msgHeader.msgSubCode.poke(MsgSubCode.Active)
+        c.io.data0.poke(5.U)
+        c.io.data1.poke(9.U)
+
+        while (!c.io.phase0Val.peek().litToBoolean) {
+          c.clock.step()
+        }
+        println(s"msgOut at phase 0: ${c.io.msgOut.peek().litValue}")
+
+        while (!c.io.phase1Val.peek().litToBoolean) {
+          c.clock.step()
+        }
+        println(s"msgOut at phase 1: ${c.io.msgOut.peek().litValue}")
+
+        while (!c.io.done.peek().litToBoolean) {
+          c.clock.step()
+        }
+        c.io.phase2Val.expect(false.B)
+        c.io.phase3Val.expect(false.B)
       }
     }
   }

@@ -407,6 +407,8 @@ class SidebandMessageEncoder extends Module {
     io.phase2Val := phase2ValReg
     io.phase3Val := phase3ValReg
 
+    //TODO: [discussion] Souldn't phasexVal be one hot?
+
     when(io.enable && io.ready){
         // send message
         when(counter === 0.U){
@@ -430,6 +432,7 @@ class SidebandMessageEncoder extends Module {
                 doneReg := true.B
             }
         }.elsewhen(counter === 3.U){
+            //TODO: why the Opcode for data is not checked here?
             msgOutReg := io.data1
             phase3ValReg := true.B
             counter := counter + 1.U
