@@ -4,7 +4,7 @@ package sideband
 import chisel3._
 
 /** Opcode <-> Packet Type (unspecified values are reserved) */
-object PacketType extends ChiselEnum {
+object Opcode extends ChiselEnum {
 
   /** 32b Memory Read */
   val MemoryRead32b = Value("b00000".U(5.W))

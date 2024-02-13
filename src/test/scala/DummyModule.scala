@@ -7,6 +7,9 @@ import interfaces._
 import sideband._
 import logphy._
 
+//
+
+// Testing only sender
 class dut2 (afeParams: AfeParams) extends Module{
     val io = IO(new Bundle{
         // sender 
@@ -49,6 +52,7 @@ class dut2 (afeParams: AfeParams) extends Module{
     io.sbAfe.rxData.ready := 0.U
     // io.sbAfe.txData.irdy := io.sbAfe.txData.valid   
 }
+
 
 class receiver () extends Module{
     val io = IO(new Bundle{
@@ -96,7 +100,7 @@ class DummyModuleTest extends AnyFunSpec with ChiselScalatestTester {
         // c.io.msgHeader.rsvd_01.poke(1.U)
         // c.io.msgHeader.msgCode.poke(MsgCode.LinkMgmt_RDI_Req.asUInt)
         // c.io.msgHeader.rsvd_02.poke(1.U)
-        // c.io.msgHeader.opcode.poke(PacketType.MessageWithoutData.asUInt)
+        // c.io.msgHeader.opcode.poke(Opcode.MessageWithoutData.asUInt)
         // // Phase 1
         // c.io.msgHeader.dp.poke(1.U)
         // c.io.msgHeader.cp.poke(1.U)

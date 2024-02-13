@@ -17,7 +17,7 @@ class RegisterSidebandHeader extends Bundle {
   val be = Bits(8.W)
   val rsvd_01 = Bits(8.W)
   val ep = Bool()
-  val opcode = PacketType()
+  val opcode = Opcode()
 
   // Phase 1
   val dp = Bool()
@@ -33,18 +33,18 @@ class RegisterSidebandHeader extends Bundle {
 // Append 32 or 64 bits of data if required in phase 2 and 3
 class SidebandMessageHeader extends Bundle {
   // Phase 0
-  val srcid = Bits(3.W)
+  val srcid = SourceID()
   val rsvd_00 = Bits(2.W)
   val rsvd_01 = Bits(5.W)
-  val msgCode = Bits(8.W)
+  val msgCode = MsgCode()
   val rsvd_02 = Bits(9.W)
-  val opcode = Bits(5.W) // Type cast to PacketType?
+  val opcode = Opcode() // Type cast to PacketType? //Stefan: Yes
   // Phase 1
   val dp = Bool()
   val cp = Bool()
   val rsvd_10 = Bits(3.W)
   val dstid = Bits(3.W)
-  val msgInfo = Bits(16.W)
-  val msgSubCode = Bits(8.W)
+  val msgInfo = MsgInfo()
+  val msgSubCode = MsgSubCode()
 }
 

@@ -7,6 +7,85 @@ import chisel3.util._
 import interfaces._
 import sideband._
 
+// Temporary, for testing remote handshake
+class SidebandTestbench extends Module {
+    val io = IO(new Bundle {
+        // To enable test
+        val enable = Input(Bool())
+        // To be added
+    })
+    // This module tests the handshake mechanism between sideband sender and receiver
+    val sideband0 = new SidebandWrapper()
+    val sideband1 = new SidebandWrapper()
+    sideband0.io.sendEnable := io.enable
+    sideband1.io.sendEnable := io.enable
+    sideband0.io.sbTx <> sideband1.io.sbRx
+    sideband1.io.sbTx <> sideband0.io.sbRx
+ 
+}
+
+class SidebandWrapper extends Module{
+    val io = IO(new Bundle {
+        val sendEnable = Input(Bool())
+        val sbTx = Decoupled(Bits(32.W))
+        val sbRx = Flipped(Decoupled(Bits(32.W)))
+        // To be added
+    })
+    // Tx part begin ---------------------------------------
+    // Need FSM to send stateChange.Active upon io.sendEnable, typically Tx
+    // Should wait for the Ack message from other side, typically Rx
+    // Upon receiving Ack, should output success
+    val waitForAck = RegInit(false.B)
+    val ackReceived = RegInit(false.B)
+    val sbMsgEnable = WireInit(false.B) 
+    val sbMsgReady = WireInit(false.B) 
+    val sbMsgData0 = WireInit(0.U(32.W))
+    val sbMsgData1 = WireInit(0.U(32.W))
+  
+    val sbOpcode = WireInit(Opcode.MessageWithoutData)
+    val sbMsgCode = WireInit(MsgCode.Nop)
+    val sbMsgInfo = WireInit(MsgInfo.RegularResponse) //RegularResponse = DontCare
+    val sbMsgSubCode = WireInit(MsgSubCode.Crd) // Crd == Nop
+
+    val sbSender = new SidebandMessageSender()
+    val sbEncoder = new SidebandMessageEncoder()
+    
+    sbSender.io.opcode := sbOpcode
+    sbSender.io.msgCode := sbOpcode
+    sbSender.io.msgInfo := sbMsgInfo
+    sbSender.io.msgSubCode := sbMsgSubCode
+    
+    sbEncoder.io.enable := sbMsgEnable
+    sbEncoder.io.ready := sbMsgReady
+    sbEncoder.io.msgHeaderIn <> sbSender.io.msgHeaderOut
+    sbEncoder.io.data0 := sbMsgData0
+    sbEncoder.io.data1 := sbMsgData1
+
+    io.sbTx.valid := sbMsgEnable & sbEncoder.io.done
+    sbEncoder.io.ready := io.sbRx.ready
+    io.sbTx.bits := sbEncoder.io.msgOut
+    // To be done, add any code as you wish
+    // Tx part End ---------------------------------------
+    
+    // Rx part Begin ---------------------------------------
+    // Need FSM to listen and receive stateChange.Active
+    // Should encode and send an Ack message
+    val msgHeaderOut = WireInit(new SidebandMessageHeader())
+    val data = WireInit(0.U(32.W))
+    val phase = WireInit(0.U(4.W))
+
+    val sbMsgDecoder = new SidebandMessageDecoder()
+
+    sbMsgDecoder.io.fire := io.sbRx.valid & io.sbTx.ready
+    sbMsgDecoder.io.msgIn := io.sbRx.bits
+    
+    msgHeaderOut := sbMsgDecoder.io.msgHeaderOut
+    data := sbMsgDecoder.io.data
+    phase := sbMsgDecoder.io.phase 
+    // To be done, add any code as you wish
+    // Rx part End ---------------------------------------
+}
+
 class LogicalPhy(
     afeParams: AfeParams,
     rdiParams: RdiParams,
@@ -15,12 +94,44 @@ class LogicalPhy(
     val rdi = Flipped(new Rdi(rdiParams))
     val mbAfe = new MainbandAfeIo(afeParams)
     val sbAfe = new SidebandAfeIo(afeParams)
+
   })
 
+    // Signal Definition Begin ------------------------------------------------------------------
     val waitForAck = RegInit(false.B)
     val ackReceived = RegInit(false.B)
+    val sbMsgEnable = WireInit(false.B) 
+    val sbMsgReady = WireInit(false.B) //// Should be from other side, for now just simulate
+    val sbMsgData0 = WireInit(0.U(32.W))
+    val sbMsgData1 = WireInit(0.U(32.W))
+  
+    val sbOpcode = WireInit(Opcode.MessageWithoutData)
+    val sbMsgCode = WireInit(MsgCode.Nop)
+    val sbMsgInfo = WireInit(MsgInfo.RegularResponse) //RegularResponse = DontCare
+    val sbMsgSubCode = WireInit(MsgSubCode.Crd) // Crd == Nop
+    // Signal Definition End ------------------------------------------------------------------
 
-    // FSM Begin ---------------------------------------------------------------
+    // Submodules Begin ------------------------------------------------------------------
+    val sbSender = new SidebandMessageSender()
+    val sbEncoder = new SidebandMessageEncoder()
+    
+    // Submodules End ------------------------------------------------------------------
+
+    // Connections Begin ------------------------------------------------------------------
+    sbSender.io.opcode := sbOpcode
+    sbSender.io.msgCode := sbOpcode
+    sbSender.io.msgInfo := sbMsgInfo
+    sbSender.io.msgSubCode := sbMsgSubCode
+    
+    sbEncoder.io.enable := sbMsgEnable
+    sbEncoder.io.ready := sbMsgReady
+    sbEncoder.io.msgHeaderIn <> sbSender.io.msgHeaderOut
+    sbEncoder.io.data0 := sbMsgData0
+    sbEncoder.io.data1 := sbMsgData1
+    
+    // Connections End ------------------------------------------------------------------
+
+    // FSM Begin ------------------------------------------------------------------
     // protocal, adaptor, and logic phy should all have their own FSM of same states and transitions
     // Refer to p250 of UCIe spec
     // Registers
@@ -130,6 +241,7 @@ class LogicalPhy(
     // Sub-Actions Begin ------------------------------------------------------------------
     // For actions, refer to p250
     // TODO: clock gating, power management
+    
     def Transition_ResetToActive (): Unit = {
         // Can transition to active, l1, and l2
         // Only side band message (dest state) differs
@@ -154,6 +266,59 @@ class LogicalPhy(
     // }
 }
 
+// This module converts a message into SidebandMessageHeader() type
+// to be sent out upon FSM request 
+class SidebandMessageSender extends Module {
+    val io = IO{new Bundle {
+        // // Opcode is 5 bit
+        // val opcode = Input(Bits(5.W))
+        // // MsgCode is 8 bit
+        // val msgCode = Input(Bits(8.W))
+        // // MsgInfo is 16 bit
+        // val msgInfo = Input(Bits(8.W))
+        // // MsgCode is 8 bit
+        // val msgSubCode = Input(Bits(16.W))
+
+        val opcode = Input(Opcode())
+        // MsgCode is 8 bit
+        val msgCode = Input(MsgCode())
+        // MsgInfo is 16 bit
+        val msgInfo = Input(MsgInfo())
+        // MsgCode is 8 bit
+        val msgSubCode = Input(MsgSubCode())
+
+        val msgHeaderOut = Output(new SidebandMessageHeader())
+    }} 
+    // val srcid = WireInit(0.U(3.W))
+    val srcid = WireInit(SourceID.DieToDieAdapter)
+
+    val rsvd_00 = WireInit(0.U(2.W))
+    val rsvd_01 = WireInit(0.U(5.W))
+    // val msgCode = WireInit(0.U(8.W))
+    val rsvd_02 = WireInit(0.U(9.W))
+    // val opcode = WireInit(0.U(5.W)) 
+    val dp = WireInit(0.U(1.W))
+    val cp = WireInit(0.U(1.W))
+    val rsvd_10 = WireInit(0.U(3.W))
+    val dstid = WireInit(0.U(3.W))
+
+    // Phase 0
+    io.msgHeaderOut.srcid := srcid 
+    io.msgHeaderOut.rsvd_00 := rsvd_00
+    io.msgHeaderOut.rsvd_01 := rsvd_01 
+    io.msgHeaderOut.msgCode := io.msgCode
+    io.msgHeaderOut.rsvd_02 := rsvd_02 
+    io.msgHeaderOut.opcode := io.opcode
+    // Phase 1
+    io.msgHeaderOut.dp := dp 
+    io.msgHeaderOut.cp := cp
+    io.msgHeaderOut.rsvd_10 := rsvd_10 
+    io.msgHeaderOut.dstid := dstid 
+    io.msgHeaderOut.msgInfo := io.msgInfo
+    io.msgHeaderOut.msgSubCode := io.msgInfo
+}
+
+// This module turns message to be sent into a 32 bit stream
 class SidebandMessageDecoder extends Module {
     val io = IO(new Bundle {
         val fire = Input(Bool())
@@ -190,17 +355,6 @@ class SidebandMessageDecoder extends Module {
         phaseCounter := 0.U
     }
 }
-
-
-
-
-
-
-
-
-
-
-
 
 class SidebandMessageEncoder extends Module {
     val io = IO(new Bundle{
@@ -267,7 +421,8 @@ class SidebandMessageEncoder extends Module {
             
             // May's question: on p145 where is phases 2&3?
             // Need to incorporate message types other than "message without data"?
-            when(io.msgHeaderIn.opcode === PacketType.MessageWith64bData.asUInt){
+            // Stefan: Yes, on p153, Messages with Data Payload
+            when(io.msgHeaderIn.opcode === Opcode.MessageWith64bData){
                 msgOutReg := io.data0
                 phase2ValReg := true.B
                 counter := counter + 1.U
