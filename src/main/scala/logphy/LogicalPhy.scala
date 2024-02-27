@@ -7,22 +7,6 @@ import chisel3.util._
 import interfaces._
 import sideband._
 
-// Temporary, for testing remote handshake
-class SidebandTestbench extends Module {
-    val io = IO(new Bundle {
-        // To enable test
-        val enable = Input(Bool())
-        // To be added
-    })
-    // This module tests the handshake mechanism between sideband sender and receiver
-    val sideband0 = new SidebandWrapper()
-    val sideband1 = new SidebandWrapper()
-    sideband0.io.sendEnable := io.enable
-    sideband1.io.sendEnable := io.enable
-    sideband0.io.sbTx <> sideband1.io.sbRx
-    sideband1.io.sbTx <> sideband0.io.sbRx
- 
-}
 
 class SidebandWrapper extends Module{
     val io = IO(new Bundle {
@@ -410,6 +394,11 @@ class SidebandMessageEncoder extends Module {
     //TODO: [discussion] Souldn't phasexVal be one hot?
 
     when(io.enable && io.ready){
+        phase0ValReg := false.B  
+        phase1ValReg := false.B
+        phase2ValReg := false.B
+        phase3ValReg := false.B
+
         // send message
         when(counter === 0.U){
             msgOutReg := phase0
@@ -432,10 +421,13 @@ class SidebandMessageEncoder extends Module {
                 doneReg := true.B
             }
         }.elsewhen(counter === 3.U){
-            //TODO: why the Opcode for data is not checked here?
-            msgOutReg := io.data1
-            phase3ValReg := true.B
-            counter := counter + 1.U
+            when(io.msgHeaderIn.opcode === Opcode.MessageWith64bData){
+                msgOutReg := io.data1
+                phase3ValReg := true.B
+                counter := counter + 1.U
+            }.otherwise{
+                doneReg := true.B
+            }
         }.otherwise{
             doneReg := true.B
         }
