@@ -37,13 +37,13 @@ object ShiftRegInit {
   */
 
 abstract class AbstractPipelineReg(w: Int = 1) extends Module {
-  val io = new Bundle {
+  val io = IO(new Bundle {
     // val d = UInt(INPUT, width = w)
     val d = Input(UInt(w.W))
     // val q = UInt(OUTPUT, width = w)
     val q = Output(UInt(w.W))
 
-  }
+  })
 }
 
 object AbstractPipelineReg {

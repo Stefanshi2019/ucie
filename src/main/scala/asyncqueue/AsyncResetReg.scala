@@ -35,14 +35,14 @@ import chisel3.util._
 class AsyncResetReg(resetValue: Int = 0)
   extends BlackBox with HasBlackBoxResource
 {
-  val io = new Bundle {
+  val io = IO (new Bundle {
     val d = Input(Bool())
     val q = Output(Bool())
     val en = Input(Bool())
 
     val clk = Input(Clock())
     val rst = Input(Bool())
-  }
+  })
 
   addResource("/vsrc/AsyncResetReg.v")
 }
@@ -57,7 +57,7 @@ class SimpleRegIO(val w: Int) extends Bundle{
 }
 
 class AsyncResetRegVec(val w: Int, val init: BigInt) extends Module {
-  val io = new SimpleRegIO(w)
+  val io = IO(new SimpleRegIO(w))
 
   val async_regs = List.tabulate(w) { idx =>
     val on = if (init.testBit(idx)) 1 else 0
