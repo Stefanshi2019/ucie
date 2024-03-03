@@ -1,9 +1,10 @@
 // See LICENSE.SiFive for license details.
-
+package edu.berkeley.cs.ucie.digital
 package freechips.asyncqueue
 
 import chisel3._
 import chisel3.util._
+import chisel3.stage.ChiselStage
 
 case class AsyncQueueParams(
   depth:  Int     = 8,
@@ -208,4 +209,36 @@ class AsyncQueue[T <: Data](gen: T, params: AsyncQueueParams = AsyncQueueParams(
   source.io.enq <> io.enq
   io.deq <> sink.io.deq
   sink.io.async <> source.io.async
+}
+
+class AsyncFifoTestDut[T <: Data](gen: T, params: AsyncQueueParams = AsyncQueueParams()) extends Module{
+    val io = IO(new CrossingIO(gen))
+    // enq_clock
+    // enq_reset
+    // enq (flipped)
+    // deq_clock
+    // deq_reset
+    // deq (Decouple)
+    val asyncfifo = Module(new AsyncQueue(gen, params))
+    asyncfifo.io.enq_clock := clock // Not sure about clock
+    asyncfifo.io.enq_reset := io.enq_reset
+
+    asyncfifo.io.enq.bits  := io.enq.bits
+    asyncfifo.io.enq.valid := io.enq.valid
+    io.enq.ready           := asyncfifo.io.enq.ready
+
+    asyncfifo.io.deq_clock := clock
+    asyncfifo.io.deq_reset := io.deq_reset
+
+    io.deq.bits := asyncfifo.io.deq.bits
+    io.deq.valid := asyncfifo.io.deq.valid
+    asyncfifo.io.deq.ready := io.deq.ready
+}
+
+
+object GenerateVerilog extends App{
+    ChiselStage.emitSystemVerilog(new AsyncQueue(
+        Bits(1.W),
+        AsyncQueueParams()
+    ))
 }

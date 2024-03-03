@@ -1,5 +1,5 @@
 // See LICENSE.SiFive for license details.
-
+package edu.berkeley.cs.ucie.digital
 package freechips.asyncqueue
 
 import chisel3._

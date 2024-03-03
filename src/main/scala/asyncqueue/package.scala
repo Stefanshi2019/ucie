@@ -1,6 +1,6 @@
 // See LICENSE.SiFive for license details.
 // This file is a selection of implicits used in AsyncQueue.
-
+package edu.berkeley.cs.ucie.digital
 package freechips
 
 import chisel3._

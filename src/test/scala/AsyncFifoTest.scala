@@ -1,13 +1,14 @@
-// package edu.berkeley.cs.ucie.digital
+package edu.berkeley.cs.ucie.digital
 package freechips.asyncqueue
 
+import chisel3.stage.ChiselStage
 import chisel3._
 import chiseltest._
 import org.scalatest.funspec.AnyFunSpec
+import java.nio.channels.AsynchronousByteChannel
 // import interfaces._
 // import sideband._
 // import freechips.asyncqueue._
-
 
 class AsyncFifoTestDut[T <: Data](gen: T, params: AsyncQueueParams = AsyncQueueParams()) extends Module{
     val io = IO(new CrossingIO(gen))
