@@ -1,14 +1,13 @@
 package edu.berkeley.cs.ucie.digital
 package logphy
 
-// import circt.stage.ChiselStage
-import chisel3.stage.ChiselStage
+import chisel3.stage.ChiselStage // Don't move this line, or it doesnt work
 import chisel3._
 import chisel3.util._
-// import circt.stage.ChiselStage
 import interfaces._
 import sideband._
-
+import afe._
+import freechips.asyncqueue._
 // Credit-based flow control is only required for in-package 
 // For now, assume direct transmission for off package.
 
@@ -132,8 +131,33 @@ class RetimerReceive(lanes: Int = 16, bufferSizeIn256B: Int = 4, mbSerializerRat
         uiOutCounter := uiOutCounter + 1.U
     }
 
-    // }
     io.outData := VecInit(deqReg.map(_.head(1))).asUInt
+
+
+
+    // Instantiating a custom async fifo, works
+    val fifo = Module(new AsyncFifoStefan(16, 16))
+    fifo.io.data_w := 0.U
+    fifo.io.valid_w := false.B
+    fifo.io.ready_r := false.B 
+    fifo.io.rst := true.B 
+    fifo.io.clk_r := false.B 
+    fifo.io.clk_w := false.B 
+
+    // Instantiating the standard async fifo, works
+    val asyncfifo = Module(new AsyncQueue(Bits(16.W), AsyncQueueParams()))
+    asyncfifo.io.enq_clock := clock
+    asyncfifo.io.enq_reset :=false.B
+    asyncfifo.io.enq.bits  := 0.U
+    asyncfifo.io.enq.valid :=false.B
+    // io.enq.ready           :=false.B
+    asyncfifo.io.deq_clock := clock
+    asyncfifo.io.deq_reset :=false.B
+    // io.deq.bits := 0.U
+    // io.deq.valid :=false.B
+    asyncfifo.io.deq.ready :=false.B
+    // }
+
 }
 
 // object GenerateVerilog extends App{
