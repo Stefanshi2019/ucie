@@ -10,6 +10,9 @@ import interfaces._
 
 class AfeFifo (depth: Int, width: Int, version: Int) extends Module {
     val io = IO(new Bundle {
+        //TODO: may's comment: I think myAfeIO/sbAfeIo should be flipped, because those come from upper layers
+        //for example, tx data is instructed by rdi through mbAfeIo.txdata and to this fifo
+        //therefore it is received by this fifo as an input stream, and then sent through mainband
         val mbAfeIo = new MainbandAfeIo(AfeParams())
         val sbAfeIo = new SidebandAfeIo(AfeParams())
         val stdIo = new StandardPackageIo()

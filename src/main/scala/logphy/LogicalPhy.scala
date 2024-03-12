@@ -71,6 +71,7 @@ class SidebandWrapper extends Module{
 }
 
 class LogicalPhy(
+    linkTrainingParams: LinkTrainingParams,
     afeParams: AfeParams,
     rdiParams: RdiParams,
 ) extends Module {
@@ -226,7 +227,18 @@ class LogicalPhy(
     // For actions, refer to p250
     // TODO: clock gating, power management
     
+    // TODO: 3 types of triggers for initiating link training:
+    // (currently only taking the second one)
+    // • Software writes 1b to Start UCIe Link Training bit in UCIe Link Control
+    // • Adapter triggers Link Training on RDI (RDI status is Reset and there is a NOP to 
+    // Active transition on the state request)
+    // • SBINIT pattern (two consecutive iterations of 64 UI clock pattern and 32 UI low) is 
+    // observed on any sideband Receiver clock/data pair
+    val linkTrainingInit = Wire(false.B)
+
     def Transition_ResetToActive (): Unit = {
+        // Trigger #2 for link training initiation
+        linkTrainingInit := true.B
         // Can transition to active, l1, and l2
         // Only side band message (dest state) differs
         
@@ -235,6 +247,30 @@ class LogicalPhy(
     }
     // Sub-Actions End ------------------------------------------------------------------
 
+    // Link Training Connections Begin --------------------------------------------------
+    val trainingModule = {
+        new LinkTrainingFSM(linkTrainingParams, afeParams, rdiParams)
+    }
+
+    trainingModule.io.rdiInitReq := linkTrainingInit
+
+    when(trainingModule.io.active) {
+
+        /** Connect RDI to Mainband IO */
+        /** connect sideband transmitter to d2d sideband channel */
+    }.otherwise {
+        /** Connect Mainband IO content to training module*/
+        //TODO: connect AFTER mainband ("buffer, fifo, etc") are instantiated&connected
+        // AfeFifo.io.stdIo.tx.mainband <> trainingModule.io.mainbandIoTx
+        // AfeFifo.io.stdIo.rx.mainband <> trainingModule.io.mainbandIoRx
+
+        /** Connect Sideband IO content to training module*/
+        //TODO: connect AFTER sideband ("buffer, fifo, etc") are instantiated&connected
+        // AfeFifo.io.stdIo.tx.sideband <> trainingModule.io.sidebandIoTx
+        // AfeFifo.io.stdIo.rx.sideband <> trainingModule.io.sidebandIoRx
+    }
+
+    // Link Training Connections End ---------------------------------------------------
 
     // Datapath Begin ------------------------------------------------------------------
     when(currentState === PhyState.reset) {
