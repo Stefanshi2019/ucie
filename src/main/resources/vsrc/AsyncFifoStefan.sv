@@ -1,5 +1,4 @@
 // Code your design here
-`timescale 1ns/100ps
 module AsyncFifoStefan #(
     parameter DEPTH = 16,
     parameter WIDTH = 8
