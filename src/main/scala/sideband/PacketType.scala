@@ -62,6 +62,21 @@ object MsgCode extends ChiselEnum {
   val ParityFeature_Req     = Value(0x07.U(8.W))
   val ParityFeature_Ack     = Value(0x08.U(8.W))
   val ErrorMsg              = Value(0x09.U(8.W))
+  val LinkTraining_Req      = Value(0x85.U(8.W))
+  val LinkTraining_Resp     = Value(0x8A.U(8.W))
+  val SbOutofReset          = Value(0x91.U(8.W))
+  val SbInitReq             = Value(0x95.U(8.W))
+  val SbInitResp            = Value(0x9A.U(8.W))
+  val MbInitReq             = Value(0xA5.U(8.W))
+  val MbInitResp            = Value(0xAA.U(8.W))
+  val MbTrainReq            = Value(0xB5.U(8.W))
+  val MbTrainResp           = Value(0xBA.U(8.W))
+  val PhyRetrainReq         = Value(0xC5.U(8.W))
+  val PhyRetrainResp        = Value(0xCA.U(8.W))
+  val RecalTrackReq         = Value(0xD5.U(8.W))
+  val RecalTrackResp        = Value(0xDA.U(8.W))
+  val TrainErrReq           = Value(0xE5.U(8.W))
+  val TrainErrResp          = Value(0xEA.U(8.W))
 }
 
 
@@ -84,6 +99,7 @@ object MsgCode extends ChiselEnum {
 
 
   // Side band message definitions, refer to p146
+//May's comment: Define different msgsubcode enum objects for different msgcodes?
 object MsgSubCode extends ChiselEnum {
 
 
@@ -116,6 +132,37 @@ object MsgSubCode extends ChiselEnum {
   // val Fatal       = Value(0x02.U(8.W))  //ErrorMsg 0x09
 }
 
+// For MsgCodes 0x85, 0x8A
+object LinkTrainingMsgSubCode extends ChiselEnum {
+  val StartTxInitiatedD2CPointTest  = Value(0x01.U(8.W)) //Start Tx initiated D2C point test resp
+  val lfsrClearErrorReq             = Value(0x02.U(8.W)) //LFSR_clear_error
+  // TODO: Define more here p.148
+}
+
+// For MsgCodes 0x91, 0x95, 0x9A, 0xA5, 0xAA
+object SbMbInitMsgSubCode extends ChiselEnum {
+  val SbInitOutofReset          = Value(0x00.U(8.W)) //SBINIT out of Reset
+  val SbInitDone                = Value(0x01.U(8.W)) //SBINIT done
+  val MbInitCalDone             = Value(0x02.U(8.W)) //MBINIT.CAL Done
+  val MbInitRepClkInit          = Value(0x03.U(8.W)) //MBINIT.REPAIRCLK init
+  val MbInitRepClkRes           = Value(0x04.U(8.W)) //MBINIT.REPAIRCLK result
+  val MbInitRepClkAppRep        = Value(0x05.U(8.W)) //MBINIT.REPAIRCLK apply repair
+  val MbInitRepClkCheckRepInit  = Value(0x06.U(8.W)) //MBINIT.REPAIRCLK check repair init
+  val MbInitRepClkCheckRes      = Value(0x07.U(8.W)) //MBINIT.REPAIRCLK check results
+  val MbInitRepClkDone          = Value(0x08.U(8.W)) //MBINIT.RepairCLK done
+  val MbInitRepValInit          = Value(0x09.U(8.W)) //MBINIT.REPAIRVAL init
+  val MbInitRepValRes           = Value(0x0A.U(8.W)) //MBINIT.REPAIRVAL result
+  val MbInitRepValAppRep        = Value(0x0B.U(8.W)) //MBINIT.REPAIRVAL apply repair
+  val MbInitRepValDone          = Value(0x0C.U(8.W)) //{MBINIT.RepairVAL done
+  val MbInitRevMbInit           = Value(0x0D.U(8.W)) //{MBINIT.REVERSALMB init
+  val MbInitRevMbClrErr         = Value(0x0E.U(8.W)) //MBINIT.REVERSALMB clear error
+  val MbInitRevMbRes            = Value(0x0F.U(8.W)) //{MBINIT.REVERSALMB result
+  val MbInitRevMbDone           = Value(0x10.U(8.W)) //MBINIT.ReversalMB done
+  val MbInitRepMbStart          = Value(0x11.U(8.W)) //{MBINIT.REPAIRMB start
+  val MbInitRepMbAppRep         = Value(0x12.U(8.W)) //MBINIT.REPAIRMB Apply repair
+  val MbInitRepMbEnd            = Value(0x13.U(8.W)) //MBINIT.REPAIRMB end ???both 0x13 and 0x14 on spec?
+}
+
 object MsgInfo extends ChiselEnum {
   // Credit for Nop only
   // val DontCare = Value(0x0000.U(16.W))
@@ -129,3 +176,17 @@ object MsgInfo extends ChiselEnum {
   val Stall           = Value(0xffff.U(16.W))
 
 }
+
+// Link training-related msg encodings, see p.145-152
+// case class MsgWoDataLkTrnEnc(msginfo: MsgInfo.Type, msgcode: MsgCode.Type, msgsubcode: ChiselEnum)
+
+// object MsgWoDataLkTrnEncodings {
+//   val startTxInitiatedD2CPointTestResp = MsgWoDataLkTrnEnc(MsgInfo., MsgCode.StartTxInitiatedD2CPointTestResp, MsgSubCode.Active)
+//   val lfsrClearErrorReq = MsgWoDataLkTrnEnc(MsgInfo., MsgCode.LFSRClearError, MsgSubCode.PMNAK)
+
+//   // Define more message types here...
+
+//   // Access message types like:
+//   // MessageTypes.startTxInitiatedD2CPointTestResp
+//   // MessageTypes.lfsrClearErrorReq
+// }
