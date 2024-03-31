@@ -69,13 +69,19 @@ class PatternGenerator(
 
   // side band width doupler: for detecting incoming sequence
   val outWidth = 96 // Desired pattern is of 96UI
-  // TODO below 3 lines: instantiate parametrizable async fifo for sb here
-  sbAsyncFifo = new asyncfifo (outwidth)
-  sbAsyncFifo.io.in <> io.sbAfe.rxData // both are flipped decoupled interface
-  sbAsyncFifo.io.out.ready := readInProgress
+  private val sidebandInWidthCoupler = new DataWidthCoupler(
+    /** collect size of largest pattern */
+    DataWidthCouplerParams(
+      inWidth = afeParams.sbSerializerRatio,
+      outWidth = outWidth,
+    ),
+  )
+  sidebandInWidthCoupler.io.in <> io.sbAfe.rxData // both are flipped decoupled interface
+  sidebandInWidthCoupler.io.out.ready := readInProgress
   io.sbAfe.txData.valid := writeInProgress
   io.sbAfe.txData.bits := patternToTransmit
 
+  // Note: point 5 on p86, repetitively sending patterns is simplified to sending 4 patterns
   when(inProgress) {
     timeoutCycles := timeoutCycles - 1.U
     when(timeoutCycles === 0.U) {
@@ -124,7 +130,7 @@ class PatternGenerator(
       is(TransmitPattern.CLOCK_64_LOW_32) {
 
             val patternToDetect = "h_aaaa_aaaa_aaaa_aaaa_0000_0000".U(outWidth.W)
-            when(sbAsyncFifo.io.out.fire) {
+            when(sidebandInWidthCoupler.io.out.fire) {
 
               /** detect clock UI pattern -- as long as the pattern is correctly
                 * aligned, this is simple
@@ -134,7 +140,7 @@ class PatternGenerator(
                 * of 4 and add 4 if the pattern is 1010, but this wouldn't work if
                 * it is misaligned for any reason
                 */
-              when(sbAsyncFifo.io.out.bits === patternToDetect) {
+              when(sidebandInWidthCoupler.io.out.bits === patternToDetect) {
                 patternDetectedCount := patternDetectedCount + 1.U
               }
             }
