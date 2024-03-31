@@ -60,7 +60,8 @@ object ClockModeParam extends ChiselEnum {
 }
 
 object TransmitPattern extends ChiselEnum {
-  val CLOCK_64_LOW_32 = Value(0.U)
+  val NO_PATTERN      = Value(0.U)
+  val CLOCK_64_LOW_32 = Value(1.U)
 }
 
 class SBIO(params: AfeParams) extends Bundle {

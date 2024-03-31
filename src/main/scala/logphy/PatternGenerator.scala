@@ -21,21 +21,16 @@ class PatternGenerator(
 ) extends Module {
   val io = IO(new Bundle {
     val patternGeneratorIO = new PatternGeneratorIO(afeParams)
+    val mbAfe = new MainbandAfeIo(afeParams)
+    val sbAfe = new SidebandAfeIo(afeParams)
 
-    /** for now, assume want to transmit on sideband IO only */
-    val mainbandLaneIO = new MainbandLaneIO(afeParams)
-    val sidebandLaneIO = new SidebandLaneIO(afeParams)
-    val mainbandIoTx = Output(new MainbandIo(afeParams.mbLanes))
-    val mainbandIoRx = Input(new MainbandIo(afeParams.mbLanes))
-    val sidebandIoTx = Output(new SidebandIo())
-    val sidebandIoRx = Input(new SidebandIo())
   })
 
   // Status Regs Begin -----------------------------------------------
   private val writeInProgress = RegInit(false.B)
   private val readInProgress = RegInit(false.B)
   private val inProgress = writeInProgress || readInProgress
-  private val pattern = RegInit(TransmitPattern.CLOCK_64_LOW_32)
+  private val pattern = RegInit(TransmitPattern.CLOCK_64_LOW_32) //TODO: init to no pattern
   private val sideband = RegInit(true.B)
   private val timeoutCycles = RegInit(0.U)
   private val status = RegInit(MessageRequestStatusType.SUCCESS)
@@ -55,8 +50,8 @@ class PatternGenerator(
     statusValid := false.B
   }.otherwise {
     //TODO
-    // writeInProgress := false.B
-    // readInProgress := false.B
+    writeInProgress := false.B
+    readInProgress := false.B
   }
 
   val clockPatternShiftReg = RegInit("h_aaaa_aaaa_aaaa_aaaa_0000_0000".U)
@@ -69,22 +64,17 @@ class PatternGenerator(
   )
 
   val patternDetectedCountMax = Seq(
-    TransmitPattern.CLOCK_64_LOW_32 -> 128.U,
+    TransmitPattern.CLOCK_64_LOW_32 -> 2.U,
   )
 
-  val outWidth = 4
-  private val sidebandInWidthCoupler = new DataWidthCoupler(
-    /** collect size of largest pattern */
-    DataWidthCouplerParams(
-      inWidth = afeParams.sbSerializerRatio,
-      outWidth = outWidth,
-    ),
-  )
-  sidebandInWidthCoupler.io.in <> io.sidebandLaneIO.rxData
-  io.sidebandLaneIO.txData.valid := writeInProgress
-  io.sidebandLaneIO.txData.bits := patternToTransmit
-  // io.sidebandLaneIO.rxData.ready := readInProgress
-  sidebandInWidthCoupler.io.out.ready := readInProgress
+  // side band width doupler: for detecting incoming sequence
+  val outWidth = 96 // Desired pattern is of 96UI
+  // TODO below 3 lines: instantiate parametrizable async fifo for sb here
+  sbAsyncFifo = new asyncfifo (outwidth)
+  sbAsyncFifo.io.in <> io.sbAfe.rxData // both are flipped decoupled interface
+  sbAsyncFifo.io.out.ready := readInProgress
+  io.sbAfe.txData.valid := writeInProgress
+  io.sbAfe.txData.bits := patternToTransmit
 
   when(inProgress) {
     timeoutCycles := timeoutCycles - 1.U
@@ -116,10 +106,11 @@ class PatternGenerator(
           afeParams.sbSerializerRatio - 1,
           0,
         )
-        when(io.sidebandLaneIO.txData.fire) {
+        when(io.sbAfe.txData.fire) {
           clockPatternShiftReg := (clockPatternShiftReg >> afeParams.sbSerializerRatio.U).asUInt &
             (clockPatternShiftReg <<
               (clockPatternShiftReg.getWidth.U - afeParams.sbSerializerRatio.U))
+
           patternWrittenCount := patternWrittenCount + 1.U
         }
       }
@@ -132,21 +123,21 @@ class PatternGenerator(
 
       is(TransmitPattern.CLOCK_64_LOW_32) {
 
-        val patternToDetect = "h_a".U(outWidth.W)
-        when(sidebandInWidthCoupler.io.out.fire) {
+            val patternToDetect = "h_aaaa_aaaa_aaaa_aaaa_0000_0000".U(outWidth.W)
+            when(sbAsyncFifo.io.out.fire) {
 
-          /** detect clock UI pattern -- as long as the pattern is correctly
-            * aligned, this is simple
-            *
-            * TODO: should I do more for pattern detection? right now for
-            * pattern detecting 128 clock UI, I count the clock cycles in chunks
-            * of 4 and add 4 if the pattern is 1010, but this wouldn't work if
-            * it is misaligned for any reason
-            */
-          when(sidebandInWidthCoupler.io.out.bits === patternToDetect) {
-            patternDetectedCount := patternDetectedCount + outWidth.U
-          }
-        }
+              /** detect clock UI pattern -- as long as the pattern is correctly
+                * aligned, this is simple
+                *
+                * TODO: should I do more for pattern detection? right now for
+                * pattern detecting 128 clock UI, I count the clock cycles in chunks
+                * of 4 and add 4 if the pattern is 1010, but this wouldn't work if
+                * it is misaligned for any reason
+                */
+              when(sbAsyncFifo.io.out.bits === patternToDetect) {
+                patternDetectedCount := patternDetectedCount + 1.U
+              }
+            }
 
       }
     }

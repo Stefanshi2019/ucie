@@ -261,13 +261,11 @@ class LogicalPhy(
     }.otherwise {
         /** Connect Mainband IO content to training module*/
         //TODO: connect AFTER mainband ("buffer, fifo, etc") are instantiated&connected
-        // AfeFifo.io.stdIo.tx.mainband <> trainingModule.io.mainbandIoTx
-        // AfeFifo.io.stdIo.rx.mainband <> trainingModule.io.mainbandIoRx
+        // AfeFifo.io.mbAfeIo <> trainingModule.io.mbAfe
 
         /** Connect Sideband IO content to training module*/
         //TODO: connect AFTER sideband ("buffer, fifo, etc") are instantiated&connected
-        // AfeFifo.io.stdIo.tx.sideband <> trainingModule.io.sidebandIoTx
-        // AfeFifo.io.stdIo.rx.sideband <> trainingModule.io.sidebandIoRx
+        // AfeFifo.io.sbAfeIo <> trainingModule.io.sbAfe
     }
 
     // Link Training Connections End ---------------------------------------------------
