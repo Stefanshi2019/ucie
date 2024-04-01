@@ -34,16 +34,21 @@ class LinkTrainingFSM(
     val mbAfe = new MainbandAfeIo(afeParams)
     val sbAfe = new SidebandAfeIo(afeParams)
 
-    /** packet output from training */
-    //TODO: direction is a little confusing
-    val mainbandIoTx = Output(new MainbandIo(afeParams.mbLanes))
-    val mainbandIoRx = Input(new MainbandIo(afeParams.mbLanes))
-    val sidebandIoTx = Output(new SidebandIo())
-    val sidebandIoRx = Input(new SidebandIo())
 
     val rdiInitReq = Input(Bool())
     val active = Output(Bool())
   })
+
+  // Method for looking up msg to msgcodes
+  def messageIsEqual(rxmsg: UInt, op: Opcode, sub: MsgSubCode, code: MsgCode): Bool = {
+
+        /** opcode */
+        (rxmsg(4, 0) === Opcode) &&
+        /** subcode */
+        (rxmsg(21, 14) === sub) &&
+        /** code */
+        (rxmsg(39, 32) === code)
+      }
 
   // Pattern generator connection Begin ---------------------------------------------------
   val patternGenerator = new PatternGenerator(afeParams)
@@ -54,13 +59,17 @@ class LinkTrainingFSM(
   }
   private val msgSource = Wire(MsgSource.PATTERN_GENERATOR)
 
-  io.mainbandLaneIO <> patternGenerator.io.mainbandLaneIO
+  // io.mainbandLaneIO <> patternGenerator.io.mainbandLaneIO
 
   when(msgSource === MsgSource.PATTERN_GENERATOR) {
-    io.sidebandIoRx <> patternGenerator.io.sidebandIoRx
-    io.sidebandIoTx <> patternGenerator.io.sidebandIoTx
-    // io.mainbandIoRx <> patternGenerator.io.mainbandIoRx
-    // io.mainbandIoTx <> patternGenerator.io.mainbandIoTx
+    // io.mbAfe.txData <> patternGenerator.io.mbAfe.txData
+    // io.mbAfe.rxData <> patternGenerator.io.mbAfe.rxData
+    // io.sbAfe.txData <> patternGenerator.io.sbAfe.txData
+    // io.sbAfe.rxData <> patternGenerator.io.sbAfe.rxData
+    io.mbAfe <> patternGenerator.io.mbAfe
+    io.sbAfe <> patternGenerator.io.sbAfe
+  } elsewhen (msgSource === MsgSource.SB_MSG_WRAPPER) {
+
   }
   // Pattern generator connection End -----------------------------------------------------
 
@@ -164,6 +173,8 @@ class LinkTrainingFSM(
 
           patternGenerator.io.patternGeneratorIO.transmitInfo.valid := true.B
           msgSource := MsgSource.PATTERN_GENERATOR
+
+          // When the pattern generator accepts the request (i.e. not busy), move on
           when(patternGenerator.io.patternGeneratorIO.transmitInfo.fire) {
             sbInitSubState := SBInitSubState.WAIT_CLOCK
           }
@@ -187,12 +198,14 @@ class LinkTrainingFSM(
           }
         }
         is(SBInitSubState.SB_OUT_OF_RESET_EXCH) {
-          sbMsgWrapper.io.trainIO.msgReq.bits.msg := SBMessage_factory(
-            SBM.SBINIT_OUT_OF_RESET,
-            "PHY",
-            true,
-            "PHY",
-          )
+          // sbMsgWrapper.io.trainIO.msgReq.bits.msg := SBMessage_factory(
+          //   SBM.SBINIT_OUT_OF_RESET,
+          //   "PHY",
+          //   true,
+          //   "PHY",
+          // )
+          sbMsgWrapper.io.opCode := Opcode.MessageWithoutData
+          sbMsgWrapper.io.opCode := Opcode.MessageWithoutData
           sbMsgWrapper.io.trainIO.msgReq.bits.reqType := MessageRequestType.MSG_EXCH
           sbMsgWrapper.io.trainIO.msgReq.bits.msgTypeHasData := false.B
           sbMsgWrapper.io.trainIO.msgReq.valid := true.B
@@ -201,6 +214,8 @@ class LinkTrainingFSM(
             0.008 * sbClockFreq,
           ).toInt.U
           msgSource := MsgSource.SB_MSG_WRAPPER
+
+          // When sb msg wrapper accepts the request (i.e. not busy), move on
           when(sbMsgWrapper.io.trainIO.msgReq.fire) {
             sbInitSubState := SBInitSubState.SB_OUT_OF_RESET_WAIT
           }

@@ -13,7 +13,23 @@ class SidebandWrapper extends Module{
         val sendEnable = Input(Bool())
         val sbTx = Decoupled(Bits(32.W))
         val sbRx = Flipped(Decoupled(Bits(32.W)))
-        // To be added
+        /* inputs for tx encoding */
+        val srcid = Input(SourceID)
+        val opCode = Input(Opcode)
+        val msgCode = Input(MsgCode)
+        val msgInfo = Input(MsgInfo)
+        val msgSubCode = Input(MsgSubCode)
+        val msgReady = Input(Bool())
+        /* Outputs from tx encoding */
+        val phase0Val = Ouput(Bool())
+        val phase1Val = Ouput(Bool())
+        val phase2Val = Ouput(Bool())
+        val phase3Val = Ouput(Bool())
+        val msgDone = Output(Bool())
+        /* Outputs from rx decoding */
+        val msgHeader = Output(new SidebandMessageHeader())
+        
+        // To be added: data, more
     })
     // Tx part begin ---------------------------------------
     // Need FSM to send stateChange.Active upon io.sendEnable, typically Tx
@@ -21,49 +37,51 @@ class SidebandWrapper extends Module{
     // Upon receiving Ack, should output success
     val waitForAck = RegInit(false.B)
     val ackReceived = RegInit(false.B)
-    val sbMsgEnable = WireInit(false.B) 
-    val sbMsgReady = WireInit(false.B) 
+    // val sbMsgEnable = WireInit(false.B) 
+    // val sbMsgReady = WireInit(false.B) 
     val sbMsgData0 = WireInit(0.U(32.W))
     val sbMsgData1 = WireInit(0.U(32.W))
-  
-    val sbOpcode = WireInit(Opcode.MessageWithoutData)
-    val sbMsgCode = WireInit(MsgCode.Nop)
-    val sbMsgInfo = WireInit(MsgInfo.RegularResponse) //RegularResponse = DontCare
-    val sbMsgSubCode = WireInit(MsgSubCode.Crd) // Crd == Nop
 
     val sbSender = new SidebandMessageSender()
     val sbEncoder = new SidebandMessageEncoder()
     
-    sbSender.io.opcode := sbOpcode
-    sbSender.io.msgCode := sbOpcode
-    sbSender.io.msgInfo := sbMsgInfo
-    sbSender.io.msgSubCode := sbMsgSubCode
+    sbSender.io.opcode := io.opCode
+    sbSender.io.msgCode := io.msgCode
+    sbSender.io.msgInfo := io.msgInfo
+    sbSender.io.msgSubCode := io.msgSubCode
+    sbSender.io.srcid := io.srcid
     
-    sbEncoder.io.enable := sbMsgEnable
-    sbEncoder.io.ready := sbMsgReady
-    sbEncoder.io.msgHeaderIn <> sbSender.io.msgHeaderOut
+    sbEncoder.io.enable := io.sendEnable
+    sbEncoder.io.ready := io.msgReady
+    sbEncoder.io.msgHeaderIn := sbSender.io.msgHeaderOut
     sbEncoder.io.data0 := sbMsgData0
     sbEncoder.io.data1 := sbMsgData1
 
-    io.sbTx.valid := sbMsgEnable & sbEncoder.io.done
+    io.sbTx.valid := sbMsgEnable & (sbEncoder.io.phase0Val | sbEncoder.io.phase1Val | sbEncoder.io.phase2Val | sbEncoder.io.phase3Val)
+    // May: "done" is for completion of all 4 phases
     sbEncoder.io.ready := io.sbRx.ready
     io.sbTx.bits := sbEncoder.io.msgOut
+    io.msgDone := sbEncoder.io.done
+    io.phase0Val := sbEncoder.io.phase0Val
+    io.phase1Val := sbEncoder.io.phase0Val
+    io.phase2Val := sbEncoder.io.phase0Val
+    io.phase3Val := sbEncoder.io.phase0Val
     // To be done, add any code as you wish
     // Tx part End ---------------------------------------
     
     // Rx part Begin ---------------------------------------
     // Need FSM to listen and receive stateChange.Active
     // Should encode and send an Ack message
-    val msgHeaderOut = WireInit(new SidebandMessageHeader())
+    // val msgHeaderOut = WireInit(new SidebandMessageHeader())
     val data = WireInit(0.U(32.W))
     val phase = WireInit(0.U(4.W))
 
     val sbMsgDecoder = new SidebandMessageDecoder()
 
-    sbMsgDecoder.io.fire := io.sbRx.valid & io.sbTx.ready
+    sbMsgDecoder.io.fire := io.sbRx.valid & io.sbTx.ready //TODO: May: why need sbTx ready?
     sbMsgDecoder.io.msgIn := io.sbRx.bits
     
-    msgHeaderOut := sbMsgDecoder.io.msgHeaderOut
+    io.msgHeader := sbMsgDecoder.io.msgHeaderOut
     data := sbMsgDecoder.io.data
     phase := sbMsgDecoder.io.phase 
     // To be done, add any code as you wish
@@ -304,11 +322,11 @@ class SidebandMessageSender extends Module {
         val msgInfo = Input(MsgInfo())
         // MsgCode is 8 bit
         val msgSubCode = Input(MsgSubCode())
+        
+        val srcid = Input(SourceID)
 
         val msgHeaderOut = Output(new SidebandMessageHeader())
     }} 
-    // val srcid = WireInit(0.U(3.W))
-    val srcid = WireInit(SourceID.DieToDieAdapter)
 
     val rsvd_00 = WireInit(0.U(2.W))
     val rsvd_01 = WireInit(0.U(5.W))
@@ -321,7 +339,7 @@ class SidebandMessageSender extends Module {
     val dstid = WireInit(0.U(3.W))
 
     // Phase 0
-    io.msgHeaderOut.srcid := srcid 
+    io.msgHeaderOut.srcid := io.srcid 
     io.msgHeaderOut.rsvd_00 := rsvd_00
     io.msgHeaderOut.rsvd_01 := rsvd_01 
     io.msgHeaderOut.msgCode := io.msgCode
@@ -337,6 +355,7 @@ class SidebandMessageSender extends Module {
 }
 
 // This module turns message to be sent into a 32 bit stream
+// TODO: more phases
 class SidebandMessageDecoder extends Module {
     val io = IO(new Bundle {
         val fire = Input(Bool())
