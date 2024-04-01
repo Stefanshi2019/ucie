@@ -66,10 +66,10 @@ class LinkTrainingFSM(
     // io.mbAfe.rxData <> patternGenerator.io.mbAfe.rxData
     // io.sbAfe.txData <> patternGenerator.io.sbAfe.txData
     // io.sbAfe.rxData <> patternGenerator.io.sbAfe.rxData
-    io.mbAfe <> patternGenerator.io.mbAfe
+    // io.mbAfe <> patternGenerator.io.mbAfe
     io.sbAfe <> patternGenerator.io.sbAfe
   } elsewhen (msgSource === MsgSource.SB_MSG_WRAPPER) {
-
+    io.sbAfe <> sbMsgWrapper.io.sbAfe
   }
   // Pattern generator connection End -----------------------------------------------------
 
@@ -204,8 +204,16 @@ class LinkTrainingFSM(
           //   true,
           //   "PHY",
           // )
-          sbMsgWrapper.io.opCode := Opcode.MessageWithoutData
-          sbMsgWrapper.io.opCode := Opcode.MessageWithoutData
+
+          //TODO: should create a way to wrap around all the fields in the packet
+          //e.g., look up table converting a msg to the required fields
+          //see sb-msg-encodings.scala
+          sbMsgWrapper.io.msgHeaderIO.opCode := Opcode.MessageWithoutData
+          sbMsgWrapper.io.msgHeaderIO.srcid := SourceID.PhysicalLayer
+          sbMsgWrapper.io.msgHeaderIO.msgCode := MsgCode.SbOutofReset
+          sbMsgWrapper.io.msgHeaderIO.msgInfo := 0.U //TODO: result[3:0]?
+          sbMsgWrapper.io.msgHeaderIO.msgSubCode := MsgSubCode.Crd
+
           sbMsgWrapper.io.trainIO.msgReq.bits.reqType := MessageRequestType.MSG_EXCH
           sbMsgWrapper.io.trainIO.msgReq.bits.msgTypeHasData := false.B
           sbMsgWrapper.io.trainIO.msgReq.valid := true.B
@@ -235,12 +243,18 @@ class LinkTrainingFSM(
           }
         }
         is(SBInitSubState.SB_DONE_REQ) {
-          sbMsgWrapper.io.trainIO.msgReq.bits.msg := SBMessage_factory(
-            SBM.SBINIT_DONE_REQ,
-            "PHY",
-            false,
-            "PHY",
-          )
+          // sbMsgWrapper.io.trainIO.msgReq.bits.msg := SBMessage_factory(
+          //   SBM.SBINIT_DONE_REQ,
+          //   "PHY",
+          //   false,
+          //   "PHY",
+          // )
+          sbMsgWrapper.io.msgHeaderIO.opCode := Opcode.MessageWithoutData
+          sbMsgWrapper.io.msgHeaderIO.srcid := SourceID.PhysicalLayer
+          sbMsgWrapper.io.msgHeaderIO.msgCode := MsgCode.SbInitReq
+          sbMsgWrapper.io.msgHeaderIO.msgInfo := MsgInfo.RegularResponse
+          sbMsgWrapper.io.msgHeaderIO.msgSubCode := MsgSubCode.Active
+
           sbMsgWrapper.io.trainIO.msgReq.bits.reqType := MessageRequestType.MSG_REQ
           sbMsgWrapper.io.trainIO.msgReq.bits.msgTypeHasData := false.B
           sbMsgWrapper.io.trainIO.msgReq.valid := true.B
@@ -267,12 +281,18 @@ class LinkTrainingFSM(
           }
         }
         is(SBInitSubState.SB_DONE_RESP) {
-          sbMsgWrapper.io.trainIO.msgReq.bits.msg := SBMessage_factory(
-            SBM.SBINIT_DONE_RESP,
-            "PHY",
-            false,
-            "PHY",
-          )
+          // sbMsgWrapper.io.trainIO.msgReq.bits.msg := SBMessage_factory(
+          //   SBM.SBINIT_DONE_RESP,
+          //   "PHY",
+          //   false,
+          //   "PHY",
+          // )
+          sbMsgWrapper.io.msgHeaderIO.opCode := Opcode.MessageWithoutData
+          sbMsgWrapper.io.msgHeaderIO.srcid := SourceID.PhysicalLayer
+          sbMsgWrapper.io.msgHeaderIO.msgCode := MsgCode.SbInitResp
+          sbMsgWrapper.io.msgHeaderIO.msgInfo := MsgInfo.RegularResponse
+          sbMsgWrapper.io.msgHeaderIO.msgSubCode := MsgSubCode.Active
+
           sbMsgWrapper.io.trainIO.msgReq.bits.reqType := MessageRequestType.MSG_RESP
           sbMsgWrapper.io.trainIO.msgReq.valid := true.B
           sbMsgWrapper.io.trainIO.msgReq.bits.msgTypeHasData := false.B

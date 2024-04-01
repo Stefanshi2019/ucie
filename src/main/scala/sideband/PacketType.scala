@@ -177,6 +177,14 @@ object MsgInfo extends ChiselEnum {
 
 }
 
+class SBMsgWrapperHeaderIO extends Bundle {
+  val opCode = Input(Opcode)
+  val srcid = Input(SourceID)
+  val msgCode = Input(MsgCode)
+  val msgInfo = Input(MsgInfo)
+  val msgSubCode = Input(MsgSubCode)
+}
+
 // Link training-related msg encodings, see p.145-152
 // case class MsgWoDataLkTrnEnc(msginfo: MsgInfo.Type, msgcode: MsgCode.Type, msgsubcode: ChiselEnum)
 

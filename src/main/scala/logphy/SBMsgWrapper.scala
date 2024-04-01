@@ -19,7 +19,7 @@ class SBMsgWrapper( //TODO: cp, dp, messages with data
     val trainIO = new SBMsgWrapperTrainIO
     val msgHeaderIO = new SBMsgWrapperHeaderIO
     // val laneIO = new SidebandLaneIO(afeParams)
-    // val sbAfe = new SidebandAfeIo(afeParams)
+    val sbAfe = new SidebandAfeIo(afeParams)
     // val opCode = Input(Opcode)
     // val srcid = Input(SourceID)
     // val msgCode = Input(MsgCode)
