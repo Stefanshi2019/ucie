@@ -50,6 +50,7 @@ class MessageRequest extends Bundle {
 class MessageRequestStatus extends Bundle {
   val status = MessageRequestStatusType()
   val data = UInt(64.W)
+  val msgInfo = UInt(16.W)
 }
 
 /** Param Enums */

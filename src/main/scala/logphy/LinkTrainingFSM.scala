@@ -52,12 +52,20 @@ class LinkTrainingFSM(
 
   // Pattern generator connection Begin ---------------------------------------------------
   val patternGenerator = new PatternGenerator(afeParams)
-  val sbMsgWrapper = new SBMsgWrapper(afeParams) //??????3.9
+  val sbMsgWrapper = new SBMsgWrapper(afeParams)
 
   private object MsgSource extends ChiselEnum {
     val PATTERN_GENERATOR, SB_MSG_WRAPPER = Value
   }
   private val msgSource = Wire(MsgSource.PATTERN_GENERATOR)
+
+  private object SbMsgWrapperSource extends ChiselEnum {
+    val MAIN, MBINITFSM = Value
+  }
+  private val sbMsgSource = Wire(SbMsgWrapperSource.MAIN)
+
+  private val sbWrapperTrainIO = RegInit(Flipped(SBMsgWrapperTrainIO)) //TODO: init value
+  private val sbWrapperMsgHeaderIO = RegInit(Flipped(SBMsgWrapperHeaderIO)) //TODO: init value
 
   // io.mainbandLaneIO <> patternGenerator.io.mainbandLaneIO
 
@@ -68,9 +76,18 @@ class LinkTrainingFSM(
     // io.sbAfe.rxData <> patternGenerator.io.sbAfe.rxData
     // io.mbAfe <> patternGenerator.io.mbAfe
     io.sbAfe <> patternGenerator.io.sbAfe
-  } elsewhen (msgSource === MsgSource.SB_MSG_WRAPPER) {
+  }.elsewhen (msgSource === MsgSource.SB_MSG_WRAPPER) {
     io.sbAfe <> sbMsgWrapper.io.sbAfe
   }
+
+when(sbMsgSource === SbMsgWrapperSource.MAIN) {
+  sbWrapperTrainIO <> sbMsgWrapper.io.trainIO
+  sbWrapperMsgHeaderIO <> sbMsgWrapper.io.msgHeaderIO
+}.elsewhen(sbMsgSource === SbMsgWrapperSource.MBINITFSM) {
+  mbInit.io.sbTrainIO <> sbMsgWrapper.io.trainIO
+  mbInit.io.sbMsgHeaderIO <> sbMsgWrapper.io.msgHeaderIO
+}
+
   // Pattern generator connection End -----------------------------------------------------
 
   private val currentState = RegInit(LinkTrainingState.reset)
@@ -208,31 +225,31 @@ class LinkTrainingFSM(
           //TODO: should create a way to wrap around all the fields in the packet
           //e.g., look up table converting a msg to the required fields
           //see sb-msg-encodings.scala
-          sbMsgWrapper.io.msgHeaderIO.opCode := Opcode.MessageWithoutData
-          sbMsgWrapper.io.msgHeaderIO.srcid := SourceID.PhysicalLayer
-          sbMsgWrapper.io.msgHeaderIO.msgCode := MsgCode.SbOutofReset
-          sbMsgWrapper.io.msgHeaderIO.msgInfo := 0.U //TODO: result[3:0]?
-          sbMsgWrapper.io.msgHeaderIO.msgSubCode := MsgSubCode.Crd
+          sbWrapperMsgHeaderIO.opCode := Opcode.MessageWithoutData
+          sbWrapperMsgHeaderIO.srcid := SourceID.PhysicalLayer
+          sbWrapperMsgHeaderIO.msgCode := MsgCode.SbOutofReset
+          sbWrapperMsgHeaderIO.msgInfo := 0.U //TODO: result[3:0]?
+          sbWrapperMsgHeaderIO.msgSubCode := MsgSubCode.Crd
 
-          sbMsgWrapper.io.trainIO.msgReq.bits.reqType := MessageRequestType.MSG_EXCH
-          sbMsgWrapper.io.trainIO.msgReq.bits.msgTypeHasData := false.B
-          sbMsgWrapper.io.trainIO.msgReq.valid := true.B
+          sbWrapperTrainIO.msgReq.bits.reqType := MessageRequestType.MSG_EXCH
+          sbWrapperTrainIO.msgReq.bits.msgTypeHasData := false.B
+          sbWrapperTrainIO.msgReq.valid := true.B
 
-          sbMsgWrapper.io.trainIO.msgReq.bits.timeoutCycles := (
+          sbWrapperTrainIO.msgReq.bits.timeoutCycles := (
             0.008 * sbClockFreq,
           ).toInt.U
           msgSource := MsgSource.SB_MSG_WRAPPER
 
           // When sb msg wrapper accepts the request (i.e. not busy), move on
-          when(sbMsgWrapper.io.trainIO.msgReq.fire) {
+          when(sbWrapperTrainIO.msgReq.fire) {
             sbInitSubState := SBInitSubState.SB_OUT_OF_RESET_WAIT
           }
         }
         is(SBInitSubState.SB_OUT_OF_RESET_WAIT) {
-          sbMsgWrapper.io.trainIO.msgReqStatus.ready := true.B
+          sbWrapperTrainIO.msgReqStatus.ready := true.B
           msgSource := MsgSource.SB_MSG_WRAPPER
-          when(sbMsgWrapper.io.trainIO.msgReqStatus.fire) {
-            switch(sbMsgWrapper.io.trainIO.msgReqStatus.bits.status) {
+          when(sbWrapperTrainIO.msgReqStatus.fire) {
+            switch(sbWrapperTrainIO.msgReqStatus.bits.status) {
               is(MessageRequestStatusType.SUCCESS) {
                 sbInitSubState := SBInitSubState.SB_DONE_REQ
               }
@@ -249,28 +266,28 @@ class LinkTrainingFSM(
           //   false,
           //   "PHY",
           // )
-          sbMsgWrapper.io.msgHeaderIO.opCode := Opcode.MessageWithoutData
-          sbMsgWrapper.io.msgHeaderIO.srcid := SourceID.PhysicalLayer
-          sbMsgWrapper.io.msgHeaderIO.msgCode := MsgCode.SbInitReq
-          sbMsgWrapper.io.msgHeaderIO.msgInfo := MsgInfo.RegularResponse
-          sbMsgWrapper.io.msgHeaderIO.msgSubCode := MsgSubCode.Active
+          sbWrapperMsgHeaderIO.opCode := Opcode.MessageWithoutData
+          sbWrapperMsgHeaderIO.srcid := SourceID.PhysicalLayer
+          sbWrapperMsgHeaderIO.msgCode := MsgCode.SbInitReq
+          sbWrapperMsgHeaderIO.msgInfo := MsgInfo.RegularResponse
+          sbWrapperMsgHeaderIO.msgSubCode := MsgSubCode.Active
 
-          sbMsgWrapper.io.trainIO.msgReq.bits.reqType := MessageRequestType.MSG_REQ
-          sbMsgWrapper.io.trainIO.msgReq.bits.msgTypeHasData := false.B
-          sbMsgWrapper.io.trainIO.msgReq.valid := true.B
-          sbMsgWrapper.io.trainIO.msgReq.bits.timeoutCycles := (
+          sbWrapperTrainIO.msgReq.bits.reqType := MessageRequestType.MSG_REQ
+          sbWrapperTrainIO.msgReq.bits.msgTypeHasData := false.B
+          sbWrapperTrainIO.msgReq.valid := true.B
+          sbWrapperTrainIO.msgReq.bits.timeoutCycles := (
             0.008 * sbClockFreq,
           ).toInt.U
           msgSource := MsgSource.SB_MSG_WRAPPER
-          when(sbMsgWrapper.io.trainIO.msgReq.fire) {
+          when(sbWrapperTrainIO.msgReq.fire) {
             sbInitSubState := SBInitSubState.SB_DONE_REQ_WAIT
           }
         }
         is(SBInitSubState.SB_DONE_REQ_WAIT) {
-          sbMsgWrapper.io.trainIO.msgReqStatus.ready := true.B
+          sbWrapperTrainIO.msgReqStatus.ready := true.B
           msgSource := MsgSource.SB_MSG_WRAPPER
-          when(sbMsgWrapper.io.trainIO.msgReqStatus.fire) {
-            switch(sbMsgWrapper.io.trainIO.msgReqStatus.bits.status) {
+          when(sbWrapperTrainIO.msgReqStatus.fire) {
+            switch(sbWrapperTrainIO.msgReqStatus.bits.status) {
               is(MessageRequestStatusType.SUCCESS) {
                 sbInitSubState := SBInitSubState.SB_DONE_RESP
               }
@@ -287,28 +304,28 @@ class LinkTrainingFSM(
           //   false,
           //   "PHY",
           // )
-          sbMsgWrapper.io.msgHeaderIO.opCode := Opcode.MessageWithoutData
-          sbMsgWrapper.io.msgHeaderIO.srcid := SourceID.PhysicalLayer
-          sbMsgWrapper.io.msgHeaderIO.msgCode := MsgCode.SbInitResp
-          sbMsgWrapper.io.msgHeaderIO.msgInfo := MsgInfo.RegularResponse
-          sbMsgWrapper.io.msgHeaderIO.msgSubCode := MsgSubCode.Active
+          sbWrapperMsgHeaderIO.opCode := Opcode.MessageWithoutData
+          sbWrapperMsgHeaderIO.srcid := SourceID.PhysicalLayer
+          sbWrapperMsgHeaderIO.msgCode := MsgCode.SbInitResp
+          sbWrapperMsgHeaderIO.msgInfo := MsgInfo.RegularResponse
+          sbWrapperMsgHeaderIO.msgSubCode := MsgSubCode.Active
 
-          sbMsgWrapper.io.trainIO.msgReq.bits.reqType := MessageRequestType.MSG_RESP
-          sbMsgWrapper.io.trainIO.msgReq.valid := true.B
-          sbMsgWrapper.io.trainIO.msgReq.bits.msgTypeHasData := false.B
+          sbWrapperTrainIO.msgReq.bits.reqType := MessageRequestType.MSG_RESP
+          sbWrapperTrainIO.msgReq.valid := true.B
+          sbWrapperTrainIO.msgReq.bits.msgTypeHasData := false.B
           msgSource := MsgSource.SB_MSG_WRAPPER
-          sbMsgWrapper.io.trainIO.msgReq.bits.timeoutCycles := (
+          sbWrapperTrainIO.msgReq.bits.timeoutCycles := (
             0.008 * sbClockFreq,
           ).toInt.U
-          when(sbMsgWrapper.io.trainIO.msgReq.fire) {
+          when(sbWrapperTrainIO.msgReq.fire) {
             sbInitSubState := SBInitSubState.SB_DONE_RESP_WAIT
           }
         }
         is(SBInitSubState.SB_DONE_RESP_WAIT) {
-          sbMsgWrapper.io.trainIO.msgReqStatus.ready := true.B
+          sbWrapperTrainIO.msgReqStatus.ready := true.B
           msgSource := MsgSource.SB_MSG_WRAPPER
-          when(sbMsgWrapper.io.trainIO.msgReqStatus.fire) {
-            switch(sbMsgWrapper.io.trainIO.msgReqStatus.bits.status) {
+          when(sbWrapperTrainIO.msgReqStatus.fire) {
+            switch(sbWrapperTrainIO.msgReqStatus.bits.status) {
               is(MessageRequestStatusType.SUCCESS) {
                 nextState := LinkTrainingState.mbInit
               }
@@ -323,9 +340,11 @@ class LinkTrainingFSM(
     // SbInit sub-state End --------------------------------------------------------------
 
     is(LinkTrainingState.mbInit) {
-      mbInit.io.sbTrainIO <> sbMsgWrapper.io.trainIO
+      mbAfe.txFreqSel := SpeedMode.speed4 //As per p86, mainband data rate is set to lowest supported (4GT/s)
+
+      
       msgSource := MsgSource.SB_MSG_WRAPPER
-      when(mbInit.io.transition.asBool) {
+      when(mbInit.io.done.asBool) {
         nextState := Mux(
           mbInit.io.error,
           LinkTrainingState.linkError,
@@ -336,7 +355,7 @@ class LinkTrainingFSM(
     is(LinkTrainingState.linkInit) {}
     is(LinkTrainingState.active) {
 
-      /** Active state = do nothing, not currently in training.
+      /** Active state = do nothing, not currently in training; unless upon rdi request, which is handled previously
         */
     }
     is(LinkTrainingState.linkError) {

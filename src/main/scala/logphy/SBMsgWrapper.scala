@@ -32,7 +32,7 @@ class SBMsgWrapper( //TODO: cp, dp, messages with data
   }
 
   private object SubState extends ChiselEnum {
-    val SEND_OR_RECEIVE_MESSAGE_0, SEND_OR_RECEIVE_MESSAGE_1, SEND_OR_RECEIVE_MESSAGE_2, SEND_OR_RECEIVE_MESSAGE_3, SEND_OR_RECEIVE_DATA = Value
+    val SEND_OR_RECEIVE_MESSAGE_0, SEND_OR_RECEIVE_MESSAGE_1, SEND_OR_RECEIVE_DATA_0, SEND_OR_RECEIVE_DATA_1 = Value
   }
 
   private val currentState = RegInit(State.IDLE)
@@ -51,6 +51,7 @@ class SBMsgWrapper( //TODO: cp, dp, messages with data
   private val nextSendSubState = Wire(sendSubState)
   sendSubState := nextSendSubState
   // msgRdy only gets set upon transition to sends
+  // TODO: ?
   when((sendSubState =/= nextSendSubState) || (currentState =/= nextState)) {
     msgRdy := true.B
   }
@@ -63,11 +64,11 @@ class SBMsgWrapper( //TODO: cp, dp, messages with data
   // val msgInfo = RegInit(MsgInfo.RegularResponse)
   // val msgSubCode = RegInit(MsgSubCode.Crd)
 
-  // To convert 1-bit sideband rx to 32-bit packet header
+  // To convert 1-bit sideband rx to 128-bit packet header
   private val sidebandRxWidthCoupler64 = new DataWidthCoupler(
     DataWidthCouplerParams(
       inWidth = afeParams.sbSerializerRatio,
-      outWidth = 64, //TODO: need to change this to match msgdecoder phases..
+      outWidth = 128, //TODO: currently all 128
     ),
   )
 
@@ -92,8 +93,9 @@ class SBMsgWrapper( //TODO: cp, dp, messages with data
   sbWrapper.io.msgCode := io.msgHeaderIO.msgCode
   sbWrapper.io.msgInfo := io.msgHeaderIO.msgInfo
   sbWrapper.io.msgSubCode := io.msgHeaderIO.msgSubCode
+  sbWrapper.io.data := io.msgHeaderIO.data
 
-  private val msgHeader = WireInit(0.U(64.W)) //TODO: append more width
+  private val msgHeader = WireInit(0.U(128.W))
   msgHeader := sbWrapper.io.msgHeader
   
   io.sbAfe.rxData <> sidebandRxWidthCoupler64.io.in
@@ -103,8 +105,9 @@ class SBMsgWrapper( //TODO: cp, dp, messages with data
   private val currentReqHasData = RegInit(false.B)
   private val currentReqTimeoutMax = RegInit(0.U(64.W))
 
-  private val dataOut = RegInit(0.U(64.W))
-  io.trainIO.msgReqStatus.bits.data := dataOut
+  // private val dataOut = RegInit(0.U(64.W))
+  io.trainIO.msgReqStatus.bits.msgInfo := msgHeader.msgInfo
+  io.trainIO.msgReqStatus.bits.data := Cat(msgHeader.data1, msgHeader.data0) // TODO: MSBs or LSBs?
   io.trainIO.msgReqStatus.bits.status := Mux(
     currentState === State.WAIT_ACK_SUCCESS,
     MessageRequestStatusType.SUCCESS,
@@ -137,7 +140,7 @@ class SBMsgWrapper( //TODO: cp, dp, messages with data
 
       def messageIsEqual(rxmsg: UInt, op: Opcode, sub: MsgSubCode, code: MsgCode): Bool = {
 
-        /** opcode */
+        /** opcode */ //TODO: double check bit positions: LSB/MSB?
         (rxmsg(4, 0) === Opcode) &&
         /** subcode */
         (rxmsg(21, 14) === sub) &&
@@ -151,7 +154,10 @@ class SBMsgWrapper( //TODO: cp, dp, messages with data
       switch(sendSubState) {
         is(SubState.SEND_OR_RECEIVE_MESSAGE_0) {
 
-          when(sbWrapper.io.phase0Val) {
+          // Only start coupling data when encoder readily outputs 32 bit packet
+          // and when the coupler has not started (avoid repeatedly sending to it)
+          // TODO: shouldn't matter because coupler would be busy anyways?
+          when(sbWrapper.io.phase0Val && !sidebandTxWidthCoupler64.io.in.fire) {
             msgRdy := false.B
             sidebandTxWidthCoupler64.io.in.valid := true.B
           }.otherwise {
@@ -162,13 +168,13 @@ class SBMsgWrapper( //TODO: cp, dp, messages with data
           when(sidebandTxWidthCoupler64.io.in.fire) {
 
           }
-          when(sidebandTxWidthCoupler64.io.out.fire) {
+          when(sidebandTxWidthCoupler64.io.out.fire) { // TODO: change this condition to sbWrapper.msgDone?
             nextSendSubState := SubState.SEND_OR_RECEIVE_MESSAGE_1
           }
         }
         is(SubState.SEND_OR_RECEIVE_MESSAGE_1) {
 
-          when(sbWrapper.io.phase1Val) {
+          when(sbWrapper.io.phase1Val && !sidebandTxWidthCoupler64.io.in.fire) {
             msgRdy := false.B
             sidebandTxWidthCoupler64.io.in.valid := true.B
           }.otherwise {
@@ -180,55 +186,38 @@ class SBMsgWrapper( //TODO: cp, dp, messages with data
 
           }
           when(sidebandTxWidthCoupler64.io.out.fire) {
-            // TODO: go to phase2 and 3 if message has data
-            nextSendSubState := SubState.SEND_OR_RECEIVE_MESSAGE_0
+            nextSendSubState := Muax(
+              currentReqHasData,
+              SubState.SEND_OR_RECEIVE_DATA_0,
+              SubState.SEND_OR_RECEIVE_MESSAGE_0
+            )
           }
         }
-        is(SubState.SEND_OR_RECEIVE_MESSAGE_2) {
-
-          when(sbWrapper.io.phase2Val) {
+        is(SubState.SEND_OR_RECEIVE_DATA_0) {
+          when(sbWrapper.io.phase2Val && !sidebandTxWidthCoupler64.io.in.fire) {
             msgRdy := false.B
             sidebandTxWidthCoupler64.io.in.valid := true.B
           }.otherwise {
             sidebandTxWidthCoupler64.io.in.valid := false.B
           }
-          
-          // When the tx decoupler receives the 32-bit phase0 data, we wait for it to be done and start crafting phase3
-          when(sidebandTxWidthCoupler64.io.in.fire) {
 
-          }
-          when(sidebandTxWidthCoupler64.io.out.fire) {
-            nextSendSubState := SubState.SEND_OR_RECEIVE_MESSAGE_3
-          }
-        }
-        is(SubState.SEND_OR_RECEIVE_MESSAGE_3) {
-
-          when(sbWrapper.io.phase3Val) {
-            msgRdy := false.B
-            sidebandTxWidthCoupler64.io.in.valid := true.B
-          }.otherwise {
-            sidebandTxWidthCoupler64.io.in.valid := false.B
-          }
-          
-          // sidebandTxWidthCoupler64.io.in.bits := currentReq(64, 0)
-          // when(sidebandTxWidthCoupler64.io.in.fire && currentReqHasData) {
-          //   sendSubState := SubState.SEND_OR_RECEIVE_DATA
-          // }
-
-          // When the tx decoupler receives the 32-bit phase0 data, we wait for it to be done
-          when(sidebandTxWidthCoupler64.io.in.fire) {
-
-          }
-          when(sidebandTxWidthCoupler64.io.out.fire) {
-            nextSendSubState := SubState.SEND_OR_RECEIVE_MESSAGE_0
-          }
-        }
-        is(SubState.SEND_OR_RECEIVE_DATA) {
-          // sidebandTxWidthCoupler64.io.in.valid := true.B
           // sidebandTxWidthCoupler64.io.in.bits := currentReq(128, 64)
-          // when(sidebandTxWidthCoupler64.io.in.fire) {
-          //   sendSubState := SubState.SEND_OR_RECEIVE_MESSAGE
-          // }
+          when(sidebandTxWidthCoupler64.io.out.fire) {
+            nextSendSubState := SubState.SEND_OR_RECEIVE_DATA_1
+          }
+        }
+        is(SubState.SEND_OR_RECEIVE_DATA_1) {
+          when(sbWrapper.io.phase3Val && !sidebandTxWidthCoupler64.io.in.fire) {
+            msgRdy := false.B
+            sidebandTxWidthCoupler64.io.in.valid := true.B
+          }.otherwise {
+            sidebandTxWidthCoupler64.io.in.valid := false.B
+          }
+
+          // sidebandTxWidthCoupler64.io.in.bits := currentReq(128, 64)
+          when(sidebandTxWidthCoupler64.io.out.fire) {
+            nextSendSubState := SubState.SEND_OR_RECEIVE_DATA_1 //TODO: what if send is done?
+          }
         }
       }
 
@@ -245,11 +234,11 @@ class SBMsgWrapper( //TODO: cp, dp, messages with data
                 io.msgHeaderIO.msgCode
               ),
             ) {
-              // when(currentReqHasData) {
-              //   receiveSubState := SubState.SEND_OR_RECEIVE_DATA
-              // }.otherwise {
-              //   nextState := State.WAIT_ACK_SUCCESS
-              // }
+              when(currentReqHasData) {
+                receiveSubState := SubState.SEND_OR_RECEIVE_DATA
+              }.otherwise {
+                nextState := State.WAIT_ACK_SUCCESS
+              }
               nextState := State.WAIT_ACK_SUCCESS
             }
           }

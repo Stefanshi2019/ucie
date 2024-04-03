@@ -163,6 +163,10 @@ object SbMbInitMsgSubCode extends ChiselEnum {
   val MbInitRepMbEnd            = Value(0x13.U(8.W)) //MBINIT.REPAIRMB end ???both 0x13 and 0x14 on spec?
 }
 
+object MbInitMsgSubCode extends ChiselEnum {
+  val MbInitParam     = Value(0x00.U(8.W))
+}
+
 object MsgInfo extends ChiselEnum {
   // Credit for Nop only
   // val DontCare = Value(0x0000.U(16.W))
@@ -177,12 +181,15 @@ object MsgInfo extends ChiselEnum {
 
 }
 
+// Bundle for transmitting packe fields from linktraining to sb
+// TODO: other fields to be incorporated?
 class SBMsgWrapperHeaderIO extends Bundle {
   val opCode = Input(Opcode)
   val srcid = Input(SourceID)
   val msgCode = Input(MsgCode)
   val msgInfo = Input(MsgInfo)
   val msgSubCode = Input(MsgSubCode)
+  val data = Input(UInt(64.W))
 }
 
 // Link training-related msg encodings, see p.145-152

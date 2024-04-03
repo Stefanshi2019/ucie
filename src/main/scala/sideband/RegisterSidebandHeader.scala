@@ -46,5 +46,9 @@ class SidebandMessageHeader extends Bundle {
   val dstid = Bits(3.W)
   val msgInfo = MsgInfo()
   val msgSubCode = MsgSubCode()
+  // phase 2
+  val data0 = UInt(32.W)
+  // phase 3
+  val data1 = UInt(32.W)
 }
 

@@ -19,6 +19,7 @@ class SidebandWrapper extends Module{
         val msgCode = Input(MsgCode)
         val msgInfo = Input(MsgInfo)
         val msgSubCode = Input(MsgSubCode)
+        val data = Input(UInt(64.W))
         val msgReady = Input(Bool())
         /* Outputs from tx encoding */
         val phase0Val = Ouput(Bool())
@@ -39,11 +40,11 @@ class SidebandWrapper extends Module{
     val ackReceived = RegInit(false.B)
     // val sbMsgEnable = WireInit(false.B) 
     // val sbMsgReady = WireInit(false.B) 
-    val sbMsgData0 = WireInit(0.U(32.W))
-    val sbMsgData1 = WireInit(0.U(32.W))
+    // val sbMsgData0 = WireInit(0.U(32.W))
+    // val sbMsgData1 = WireInit(0.U(32.W))
 
     val sbSender = new SidebandMessageSender()
-    val sbEncoder = new SidebandMessageEncoder()
+    val sbEncoder = new SidebandMessageEncoder() //TODO: differentiate packet w/, w/o data
     
     sbSender.io.opcode := io.opCode
     sbSender.io.msgCode := io.msgCode
@@ -54,8 +55,8 @@ class SidebandWrapper extends Module{
     sbEncoder.io.enable := io.sendEnable
     sbEncoder.io.ready := io.msgReady
     sbEncoder.io.msgHeaderIn := sbSender.io.msgHeaderOut
-    sbEncoder.io.data0 := sbMsgData0
-    sbEncoder.io.data1 := sbMsgData1
+    sbEncoder.io.data0 := io.data(63, 32)
+    sbEncoder.io.data1 := io.data(31, 0)
 
     io.sbTx.valid := sbMsgEnable & (sbEncoder.io.phase0Val | sbEncoder.io.phase1Val | sbEncoder.io.phase2Val | sbEncoder.io.phase3Val)
     // May: "done" is for completion of all 4 phases
@@ -355,7 +356,7 @@ class SidebandMessageSender extends Module {
 }
 
 // This module turns message to be sent into a 32 bit stream
-// TODO: more phases
+// TODO: extend msgIn to 128 bits
 class SidebandMessageDecoder extends Module {
     val io = IO(new Bundle {
         val fire = Input(Bool())
@@ -385,6 +386,10 @@ class SidebandMessageDecoder extends Module {
         io.msgHeaderOut.dstid := io.msgIn(26, 24)
         io.msgHeaderOut.msgInfo := io.msgIn(23, 8)
         io.msgHeaderOut.msgSubCode := io.msgIn(7, 0)
+
+        io.msgHeaderOut.data0 := io.msgIn(31, 0)
+
+        io.msgHeaderOut.data1 := io.msgIn(31, 0)
     // }
     when(io.fire) {
         phaseCounter := phaseCounter + 1.U
