@@ -21,6 +21,7 @@ lazy val root = (project in file("."))
       "edu.berkeley.cs" %% "chisel3" % chiselVersion,
       "edu.berkeley.cs" %% "chiseltest" % "0.6.2" % Test,
       "org.scalatest" %% "scalatest" % "3.2.17" % Test,
+      "com.sifive" %% "chisel-circt" % "X.Y.Z",
     ),
     addCompilerPlugin(
       "edu.berkeley.cs" % "chisel3-plugin" % chiselVersion cross CrossVersion.full,

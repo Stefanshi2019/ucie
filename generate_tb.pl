@@ -86,11 +86,14 @@ foreach my $port (@inputs, @outputs) {
     print $tb_fh "    .$port->{name}($port->{name}),\n";
 }
 
-if ($last_output) {
+if ($last_input && $last_output ) {
+    print $tb_fh "    .$last_input->{name}($last_input->{name}),\n";
     print $tb_fh "    .$last_output->{name}($last_output->{name})\n";
 } elsif ($last_input) {
     print $tb_fh "    .$last_input->{name}($last_input->{name})\n";
-}
+} elsif ($last_output) {
+    print $tb_fh "    .$last_output->{name}($last_output->{name})\n";
+} 
 
 print $tb_fh ");\n\n";
 

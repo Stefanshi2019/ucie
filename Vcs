@@ -20,6 +20,12 @@ else
     dir_exists=1
 fi
 
+
+sed -i 's/`timescale.*//g' ${module_name}.sv
+
+sed -i '1i\`timescale 1ns/100ps' ${module_name}.sv
+sed -i -E 's/(always @\(posedge (.*)_clkp).*/\1 or posedge \2_clkn) begin/g' ${module_name}.sv
+sed -i -E 's/(always @\(posedge (.*)_clk_800).*/\1 or negedge \2_clk_800) begin/g' ${module_name}.sv
 # Move module_name.sv into the newly created directory if it exists and if directory was just created or file does not exist in the directory
 # module_name.sv will always be overridden if there exists a module_name.sv in base dir
 if [ -f "${module_name}.sv" ]; then
@@ -28,6 +34,7 @@ if [ -f "${module_name}.sv" ]; then
     cp "${module_name}.fir" "$module_name/"
     echo "Moved ${module_name} files into ${module_name}/"
 fi
+
 
 # Check if tb_module_name.sv does not exist before creating it
 if [ ! -f "${module_name}/tb_${module_name}.sv" ]; then

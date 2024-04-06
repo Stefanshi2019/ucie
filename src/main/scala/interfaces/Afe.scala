@@ -40,8 +40,8 @@ class StandardPackageIo(lanes: Int = 16) extends Bundle {
 }
 
 case class AfeParams(
-    sbSerializerRatio: Int = 1,
-    mbSerializerRatio: Int = 8,
+    sbSerializerRatio: Int = 64,
+    mbSerializerRatio: Int = 16,
     mbLanes: Int = 16,
 )
 
