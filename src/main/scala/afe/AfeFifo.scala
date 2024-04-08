@@ -10,10 +10,11 @@ import chisel3.experimental.DataMirror
 
 
 // This module receives data from adapter and sends to analog
-class TxMainband(depth: Int, width: Int, version: Int, lanes: Int = 16, BYTE: Int = 8) extends Module {
+class TxMainband(depth: Int, afeParams: AfeParams=AfeParams(), BYTE: Int = 8) extends Module {
     val io = IO(new Bundle {
         // should use rx of mbafeIo
-        val mbAfeIo = new MainbandAfeIo(AfeParams())
+        // val mbAfeIo = new MainbandAfeIo(AfeParams())
+        val rxMbAfe =  Flipped(Decoupled(Vec(afeParams.mbLanes, Bits(afeParams.mbSerializerRatio.W))))
         val txMbIo = Output(new MainbandIo())
 
         val clkp = Input(Clock())
@@ -21,27 +22,19 @@ class TxMainband(depth: Int, width: Int, version: Int, lanes: Int = 16, BYTE: In
         val track = Input(Bool())        
         // val output_clkp = Output(Clock())
         // Dummy signals for testing
-        val startDeq = Input(Bool())
     })
-    io.mbAfeIo.txData.bits := Seq.fill(lanes)(0.U)
-    io.mbAfeIo.txData.valid := false.B 
+    val lanes = afeParams.mbLanes
+    val width = afeParams.mbSerializerRatio
 
-
+    // io.mbAfeIo.txData.bits := Seq.fill(lanes)(0.U)
+    // io.mbAfeIo.txData.valid := false.B 
     
-    val startDeqReg = RegNext(io.startDeq)
-
-    val queueParams = AsyncQueueParams(
-        depth = depth,   // Custom depth
-        sync = 3,     // Custom synchronization stages
-        safe = true,  // Use safe reset
-        narrow = false // Use wide configuration
-    ) 
     // receive data
-    val rxMbAfeData = io.mbAfeIo.rxData
+    // val rxMbAfeData = io.mbAfeIo.rxData
+    val rxMbAfeData = io.rxMbAfe
 
     // Default fifo has problem: when deq starts, data is XXXX for at least 10 cycles, not sure why
     // Use custom async fifo, this one works
-    // val txMbFifos = Seq.fill(lanes)(Module (new AsyncQueue(Bits(BYTE.W), queueParams)))
     val txMbFifos = Seq.fill(lanes)(Module (new AsyncFifoStefan(depth, BYTE)))
     withClock(io.clkp) {
         val outValid = Wire(Bool())
@@ -51,19 +44,21 @@ class TxMainband(depth: Int, width: Int, version: Int, lanes: Int = 16, BYTE: In
         // val txMbUICounter_next = RegNext(txMbUICounter, (BYTE/2-1).U) // To synchronize mbio valid signal
         val txMbUICounter_next = RegNext(txMbUICounter, 0.U) // To synchronize mbio valid signal
         val hasData = Wire(Bool())
-        val clockGateCounter = RegInit(0.U(log2Ceil(16).W))
+        val clockGateCounter = RegInit(0.U(log2Ceil(width).W))
         val fifoValid_next = RegNext(txMbFifos.map(_.io.deq.valid).reduce(_ && _))
-        val shift = RegInit(false.B(Bool()))
+               // val txMbUICounter_next = RegNext(txMbUICounter, (BYTE/2-1).U) // To synchronize mbio valid signal
+ 
+        val shift = RegInit(false.B)
         val outValid_next = RegNext(outValid)
         hasData := ~(txMbFifos.map(_.io.deq.valid).reduce(_ && _) ^ fifoValid_next ) & fifoValid_next 
         when(outValid){
             clockGateCounter := 0.U
-        }.elsewhen(~outValid && clockGateCounter < 12.U) {
+        }.elsewhen(~outValid && clockGateCounter < width.U) {
             clockGateCounter := clockGateCounter + 1.U
         }
 
-        io.txMbIo.clkn := Mux((clockGateCounter >= 12.U && ~outValid), false.B, io.clkn.asBool).asClock
-        io.txMbIo.clkp := Mux((clockGateCounter >= 12.U && ~outValid), false.B, io.clkp.asBool).asClock
+        io.txMbIo.clkn := Mux((clockGateCounter >= width.U && ~outValid), false.B, io.clkn.asBool).asClock
+        io.txMbIo.clkp := Mux((clockGateCounter >= width.U && ~outValid), false.B, io.clkp.asBool).asClock
         // io.output_clkp := Mux((clockGateCounter >= 8.U && ~outValid), 0.U, io.clkp.asUInt)
         // Assign each async fifo individually
         txMbFifos.zipWithIndex.foreach{ case (txMbFifo, i) =>
@@ -149,16 +144,24 @@ class RxSideband(depth:Int, width: Int = 1, afeParams: AfeParams = AfeParams()) 
     
     withClock(io.clk_800){
         val shiftReg = RegInit(0.U(bw.W))
+        val shiftReg_pipe_1 = RegNext(shiftReg)
+        val shiftReg_xor = WireInit(0.U(bw.W))
+
         val rxCounter = RegInit(0.U(log2Ceil(bw).W))
-        val rxCounter_pipe_0 = RegNext(rxCounter)
-        val rxCounter_pipe_1 = RegNext(rxCounter_pipe_0)
-        val data_pipe_0 = RegNext(io.rxSbIo.data)
-        val data_pipe_1 = RegNext(data_pipe_0)
-        val clock_pipe_0 = RegNext(io.rxSbIo.clk)
-        val clock_pipe_1 = RegNext(clock_pipe_0)
+        val rxCounter_pipe_1 = RegNext(rxCounter)
+        val rxCounter_pipe_2 = RegNext(rxCounter_pipe_1)
+        val fifo_enq_valid_pipe_1 = RegNext(rxCounter_pipe_2 === (bw-1).U && rxCounter_pipe_1 === 0.U) 
+
+        val data_pipe_1 = RegNext(io.rxSbIo.data)
+        val data_pipe_2 = RegNext(data_pipe_1)
+        val clock_pipe_1 = RegNext(io.rxSbIo.clk)
+        val clock_pipe_2 = RegNext(clock_pipe_1)
         val enable = WireInit(false.B)
         val enable_counter = RegInit(0.U(2.W))
-        enable := clock_pipe_0.asBool ^ clock_pipe_1.asBool
+
+        enable := clock_pipe_1.asBool ^ clock_pipe_2.asBool
+        shiftReg_xor := shiftReg ^ shiftReg_pipe_1
+
         when(enable){
             enable_counter := 2.U
         }.elsewhen(enable_counter > 0.U){
@@ -170,16 +173,21 @@ class RxSideband(depth:Int, width: Int = 1, afeParams: AfeParams = AfeParams()) 
         fifo.io.enq_clock := io.clk_800
         fifo.io.enq_reset := reset
         when(enable_counter.orR){
-            when(rxCounter_pipe_1 === (bw-1).U){
-                shiftReg := 0.U | (data_pipe_1 << (bw-1).U)
-                fifo.io.enq.valid := true.B
-                fifo.io.enq.bits := shiftReg 
-                
+            when(rxCounter_pipe_2 === (bw-1).U){
+                shiftReg := 0.U | (data_pipe_2 << (bw-1).U)
+                shiftReg_pipe_1 := shiftReg
             }.otherwise{
-                shiftReg := (shiftReg >> 1.U) | (data_pipe_1 << (bw-1).U)
+                shiftReg := (shiftReg >> 1.U) | (data_pipe_2 << (bw-1).U)
+                shiftReg_pipe_1 := 0.U
             }
             rxCounter := rxCounter + 1.U
         }
+        when((rxCounter_pipe_2 === (bw-1).U && rxCounter_pipe_1 === 0.U)
+        ^ fifo_enq_valid_pipe_1) {
+                fifo.io.enq.valid := true.B
+                fifo.io.enq.bits := shiftReg_xor 
+        }
+
     }
 }
 
@@ -225,41 +233,34 @@ class TxSideband(depth:Int, width: Int = 1, afeParams: AfeParams=AfeParams()) ex
         when(txIng === true.B){
             shiftReg := shiftReg >> 1.U
         }
-        // }
-        // shiftReg := Mux(txIng, shiftReg >> 1.U, shiftReg)
-        // io.txSbIo.data := Mux(txIng, shiftReg(0), 0.U)
         io.txSbIo.data := shiftReg(0)
         io.txSbIo.clk := Mux(txIng, io.clk_800.asBool, false.B).asClock
     }
 }
 
 // This module accepts data from analog and send to adapter
-class RxMainband(depth: Int, width: Int, version: Int, lanes: Int = 16, BYTE: Int = 8) extends Module {
+class RxMainband(depth: Int, afeParams: AfeParams=AfeParams(), BYTE: Int = 8) extends Module {
     val io = IO(new Bundle {
         // should use rx of mbafeIo
-        val mbAfeIo = new MainbandAfeIo(AfeParams())
+        // val mbAfeIo = new MainbandAfeIo(AfeParams())
         val rxMbIo = Input(new MainbandIo())
-
+        val txMbAfe = Decoupled(Vec(afeParams.mbLanes, Bits(afeParams.mbSerializerRatio.W)))
         // Dummy signals for testing
-        val startEnq = Input(Bool())
         val clkn_out = Output(Clock())
         
     })
-    val queueParams = AsyncQueueParams(
-        depth = depth,   // Custom depth
-        sync = 3,     // Custom synchronization stages
-        safe = true,  // Use safe reset
-        narrow = false // Use wide configuration
-    ) 
+
+    private val width = afeParams.mbSerializerRatio
+    private val lanes = afeParams.mbLanes
     // Since sending data to adapter,
     // This module Should drive mbAfeIo tx data
-    io.mbAfeIo.rxData.ready := false.B 
+    // io.mbAfeIo.rxData.ready := false.B 
     io.clkn_out := io.rxMbIo.clkn
     // io.mbAfeIo.rxData.bits := Seq.fill(lanes)(0.U) 
-    val txMbAfeData = io.mbAfeIo.txData
+    // val txMbAfeData = io.mbAfeIo.txData
+    val txMbAfeData = io.txMbAfe
 
     // This module receives data from analog, and store into async buffer
-    // val rxMbFifos = Seq.fill(lanes)(Module (new AsyncQueue(Bits(BYTE.W), queueParams)))
     val rxMbFifos = Seq.fill(lanes)(Module (new AsyncFifoStefan(depth, BYTE)))
 
         // Enqueue end from analog
@@ -280,7 +281,7 @@ class RxMainband(depth: Int, width: Int, version: Int, lanes: Int = 16, BYTE: In
 
         // val rxMbIoData_next = RegNext(io.rxMbIo.data)
         val rxMbIoData_next = RegInit(0.U(width.W))
-        val fifo_enq_valid_next = RegNext(rxMbUICounter_next === 7.U && rxMbUICounter === 0.U)
+        val fifo_enq_valid_next = RegNext(rxMbUICounter_next === (BYTE-1).U && rxMbUICounter === 0.U)
         val internal_valid = (mbIoValid_next ^ io.rxMbIo.valid) | (mbIoValid_next & io.rxMbIo.valid)
          
         rxMbFifos.zipWithIndex.foreach{ case(rxMbFifo, i) =>
@@ -311,7 +312,7 @@ class RxMainband(depth: Int, width: Int, version: Int, lanes: Int = 16, BYTE: In
                 rxMbUICounter := rxMbUICounter + 1.U
             }
             rxMbShiftRegs_xor(i) := rxMbShiftRegs(i) ^ rxMbShiftRegs_next(i)
-            when((rxMbUICounter_next === 7.U && rxMbUICounter === 0.U) 
+            when((rxMbUICounter_next === (BYTE-1).U && rxMbUICounter === 0.U) 
                 ^ fifo_enq_valid_next 
                 ) {
                 rxMbFifo.io.enq.valid := true.B
@@ -339,27 +340,32 @@ class PhyTest extends Module {
         val rx_user = new MainbandAfeIo(AfeParams())
         val clkp = Input(Clock())
         val clkn = Input(Clock())
-        val startDeq = Input(Bool())
-        val startEnq = Input(Bool())
+        // val startDeq = Input(Bool())
+        // val startEnq = Input(Bool())
         val clkn_out = Output(Clock())
     })
 
 
-    val sender = Module(new TxMainband(16, 16, 0))
-    val receiver = Module(new RxMainband(16, 16, 0))
-    sender.io.mbAfeIo <> io.tx_user 
+    val sender = Module(new TxMainband(16))
+    val receiver = Module(new RxMainband(16))
+    sender.io.rxMbAfe <> io.tx_user.rxData 
     sender.io.txMbIo  <> receiver.io.rxMbIo 
     sender.io.clkp := io.clkp 
     sender.io.clkn := io.clkn 
     sender.io.track := 0.U 
-    sender.io.startDeq := io.startDeq 
+    // sender.io.startDeq := io.startDeq 
 
-    receiver.io.mbAfeIo <> io.rx_user 
-    receiver.io.startEnq := io.startEnq
+    receiver.io.txMbAfe <> io.rx_user.txData 
+    // receiver.io.startEnq := io.startEnq
     io.clkn_out := receiver.io.clkn_out
+
+    io.tx_user.txData.bits := Seq.fill(16)(0.U) 
+    io.tx_user.txData.valid := false.B 
+    io.rx_user.rxData.ready := false.B
+
 }
 
-class AfeFifo (depth: Int, width: Int, version: Int) extends Module {
+class AfeFifo (depth: Int=16) extends Module {
     val io = IO(new Bundle {
         val mbAfeIo = new MainbandAfeIo(AfeParams())
         val sbAfeIo = new SidebandAfeIo(AfeParams())
@@ -367,222 +373,49 @@ class AfeFifo (depth: Int, width: Int, version: Int) extends Module {
         // The following differential clock comes from pll
         val clkp = Input(Clock())
         val clkn = Input(Clock())
-        val clk800 = Input(Clock())
-        // Dummy signals for testing
-        val startDeq = Input(Bool())
-        val startEnq = Input(Bool())
+        val clk_800 = Input(Clock())
     })
 
-    val startDeqReg = RegNext(io.startDeq)
 
-    val lanes = AfeParams().mbLanes
-    val BYTE = 8
-    val queueParams = AsyncQueueParams(
-        depth = depth,   // Custom depth
-        sync = 3,     // Custom synchronization stages
-        safe = true,  // Use safe reset
-        narrow = false // Use wide configuration
-    )
+    val txMainband = Module(new TxMainband(depth))
+    val rxMainband = Module(new RxMainband(depth))
+    val txSideband = Module(new TxSideband(depth))
+    val rxSideband = Module(new RxSideband(depth))
 
-    val txMbIo = io.stdIo.tx.mainband
-    val rxMbIo = io.stdIo.rx.mainband
-    val txSbIo = io.stdIo.tx.sideband
-    val rxSbIo = io.stdIo.rx.sideband
-
-    // Decoupled data
-    val txMbAfeData = io.mbAfeIo.txData
-    val rxMbAfeData = io.mbAfeIo.rxData
-    val txSbAfeData = io.sbAfeIo.txData
-    val rxSbAfeData = io.sbAfeIo.rxData
- 
-    val txMbFifos = Seq.fill(lanes)(Module (new AsyncQueue(Bits(BYTE.W), queueParams)))
-    val txMbShiftRegs = Seq.fill(lanes)(RegInit(0.U(BYTE.W)))
-    val txMbUICounter = RegInit(0.U(log2Ceil(lanes).W))
-
-    // Assign each async fifo individually
-    txMbFifos.zipWithIndex.foreach{ case (txMbFifo, i) =>
-        txMbFifo.io.enq_clock := clock //enq is from afe, use system clock
-        txMbFifo.io.enq_reset := reset // use system reset
-        txMbFifo.io.enq.bits  := rxMbAfeData.bits(i)
-        txMbFifo.io.enq.valid := rxMbAfeData.valid
-
-        withClock(io.clkp){
-            txMbFifo.io.deq_clock := io.clkp
-            txMbFifo.io.deq_reset := reset
-            txMbIo.valid := txMbFifo.io.deq.valid
-            txMbFifo.io.deq.ready := false.B
-
-            when(startDeqReg){
-                when(txMbUICounter === 0.U) {
-                    txMbFifo.io.deq.ready := true.B
-                    txMbShiftRegs(i) := txMbFifo.io.deq.bits
-                }.otherwise{
-                    txMbShiftRegs(i) := txMbShiftRegs(i) << 1.U
-                }
-                txMbUICounter := txMbUICounter + 1.U
-            }
-        }
-    }
-    txMbIo.data := VecInit(txMbShiftRegs.map(_.head(1))).asUInt
-    rxMbAfeData.ready := txMbFifos.map(_.io.enq.ready).reduce(_ && _) 
-
-
-
-
-    val rxMbFifos = Seq.fill(lanes)(Module (new AsyncQueue(Bits(BYTE.W), queueParams)))
-    val rxMbShiftRegs = Seq.fill(lanes)(RegInit(0.U(BYTE.W)))
-    val rxMbUICounter = RegInit(0.U(log2Ceil(lanes).W))
-    val rxMbUICounter_next = RegNext(rxMbUICounter)
-
-    val rxMbIoData_next = RegNext(rxMbIo.data)
-
-    val startEnqReg = RegNext(io.startEnq)
-    rxMbFifos.zipWithIndex.foreach{ case(rxMbFifo, i) =>
-        withClock(rxMbIo.clkp) {
-            rxMbFifo.io.enq_clock := rxMbIo.clkp 
-            rxMbFifo.io.enq_reset := reset
-            rxMbFifo.io.enq.valid := false.B
-            // For clear testing visuals, should always connect to signal path for minimal delay
-            rxMbFifo.io.enq.bits := 0.U
-            // rxMbFifo.io.enq.bits := Cat(rxMbShiftRegs.reverse)
-            when(startEnqReg){
-                when(rxMbUICounter_next === 7.U) {
-                    rxMbFifo.io.enq.valid := true.B
-                    rxMbFifo.io.enq.bits := Cat(rxMbShiftRegs.reverse)
-                }
-
-                when(rxMbUICounter === 0.U) {
-                    for(i <- 0 until lanes) {
-                        rxMbShiftRegs(i) := 0.U | rxMbIoData_next(i)
-                    }
-
-                }.otherwise {
-                    for(i <- 0 until lanes) {
-                        rxMbShiftRegs(i) := rxMbShiftRegs(i) << 1.U | rxMbIoData_next(i)
-                    } 
-                }
-                rxMbUICounter := rxMbUICounter + 1.U
-            }
-        }
-        
-        rxMbFifo.io.deq_clock := clock
-        rxMbFifo.io.deq_reset := reset
-        txMbAfeData.bits := rxMbFifo.io.deq.bits
-        rxMbAfeData.valid := rxMbFifo.io.deq.valid 
-        rxMbFifo.io.deq.ready := rxMbAfeData.ready
-
-    }
-    // Dummy to pass compilation for now
-    txMbAfeData.bits := Seq.fill(lanes)(0.U)
-    txSbAfeData.bits := 0.U
-    txMbIo.clkn := io.clkn 
-    txMbIo.clkp := io.clkp 
-    txSbIo.clk := io.clk800 
-    txMbIo.track := 0.U 
-    txSbIo.data := 0.U 
-    txMbAfeData.valid := true.B
-    io.sbAfeIo.rxEn := 0.U 
-    io.sbAfeIo.rxData.ready := 0.U 
-    io.sbAfeIo.txData.valid := 0.U
-    io.sbAfeIo.pllLock := 0.U
-
-
-    // val txMbFifo = Module(new AsyncQueue(Bits(width.W), queueParams))
-    // txMbAfeData.ready := true.B 
-
-    //// Still valid, to be implemented later
-    // val rxMbFifo = Module(new AsyncQueue(Bits(width.W), queueParams))
-    // rxMbFifo.io.enq_clock := rxMbIo.clkp
-    // rxMbFifo.io.enq_reset := reset
-    // rxMbFifo.io.enq.bits := rxMbIo.data
-    // rxMbFifo.io.enq.valid := rxMbIo.valid
-    // // leave rxMbFifo.io.enq floating
-    // // If fifo full -> ready == 0, data will keep transferring and lost on the way
-    // rxMbFifo.io.deq_clock := clock
-    // rxMbFifo.io.deq_reset := reset
-    // rxMbAfeData.bits := rxMbFifo.io.deq.bits
-    // rxMbAfeData.valid := rxMbFifo.io.deq.valid 
-    // rxMbFifo.io.deq.ready := rxMbAfeData.ready
-
-    // // Sideband to be implemented later
-    // val txSbIo = io.stdIo.tx.sideband
-    // val rxSbIo = io.stdIo.rx.sideband
-
-    // val txSbAfeData = io.sbAfeIo.txData
-    // val rxSbAfeData = io.sbAfeIo.rxData 
+    // txMainband
+    txMainband.io.rxMbAfe <> io.mbAfeIo.rxData 
+    io.stdIo.tx.mainband := txMainband.io.txMbIo
+    txMainband.io.clkp := io.clkp 
+    txMainband.io.clkn := io.clkn
+    txMainband.io.track := false.B 
     
-    // txSbIo.clk := io.clk800
-    // txSbIo.data := txMbAfeData.bits
+    rxMainband.io.txMbAfe <> io.mbAfeIo.txData
+    rxMainband.io.rxMbIo := io.stdIo.rx.mainband 
     
+    txSideband.io.rxSbAfe <> io.sbAfeIo.rxData 
+    txSideband.io.clk_800 := io.clk_800 
+    io.stdIo.tx.sideband := txSideband.io.txSbIo
 
-    // val txSbFifo =  Module(new AsyncQueue(Bits(1.W), queueParams))
-    
-    // // Use clkp only for now
-    // // later implement an arbitor for clkp/clkn
-    // val txMbfifo = if(version == 0){
-    //     Module(new AsyncQueue(Bits(width.W), queueParams))
-    // } else {
-    //     // val fifo = Module(new AsyncFifoStefan(depth, width))
-    //     // fifo.io.data_w := 0.U
-    //     // fifo.io.valid_w := false.B
-    //     // fifo.io.ready_r := false.B 
-    //     // fifo.io.rst := true.B 
-    //     // fifo.io.clk_r := false.B 
-    //     // fifo.io.clk_w := false.B 
-    // }
+    rxSideband.io.txSbAfe <> io.sbAfeIo.txData 
+    rxSideband.io.clk_800 := io.clk_800 
+    rxSideband.io.rxSbIo := io.stdIo.rx.sideband
 
-    // if(verssion == 0){
-    //     txMbfifo.io.enq_clock := clock //enq is from afe, use system clock
-    //     txMbfifo.io.enq_reset := reset // use system reset
-    //     txMbfifo.io.enq.bits  := txAfeData.bits
-    //     txMbfifo.io.enq.valid := txAfeData.valid
-    //     txAfeData.ready           := txMbfifo.io.enq.ready
-
-    //     txMbfifo.io.deq_clock := io.clkp
-    //     txMbfifo.io.deq_reset := reset
-    //     txMbIo.data := txMbfifo.io.deq.bits
-    //     txMbIo.valid := txMbfifo.io.deq.valid
-    //     txMbfifo.io.deq.ready := true.B // No back pressure on mainband, assume ready always on?
-    // }
-
-
-    // val rxMbfifo = if(version == 0){
-    //     Module(new AsyncQueue(Bits(width.W), queueParams))
-
-    //     // asyncfifo.io.enq_clock := io.clkp //enq is from afe, use system clock
-    //     // asyncfifo.io.enq_reset := reset // use system reset
-    //     // asyncfifo.io.enq.bits  := rxMbIo.data
-    //     // asyncfifo.io.enq.valid := rxMbIo.valid
-    //     // txAfeData.ready           := asyncfifo.io.enq.ready
-
-    //     // asyncfifo.io.deq_clock := clock
-    //     // asyncfifo.io.deq_reset := reset
-    //     // rxMbIo := asyncfifo.io.deq.bits
-    //     // txMbIo.valid := asyncfifo.io.deq.valid
-    //     // asyncfifo.io.deq.ready := true.B // No back pressure on mainband, assume ready always on?
-    // } else {
-    //     val fifo = Module(new AsyncFifoStefan(depth, width))
-    //     fifo.io.data_w := 0.U
-    //     fifo.io.valid_w := false.B
-    //     fifo.io.ready_r := false.B 
-    //     fifo.io.rst := true.B 
-    //     fifo.io.clk_r := false.B 
-    //     fifo.io.clk_w := false.B 
-    // } 
+    io.sbAfeIo.rxEn := false.B 
+    io.sbAfeIo.pllLock := false.B
 
 }
 
 // To execute do:
 // runMain edu.berkeley.cs.ucie.digital.afe.TxMainbandVerilog 
 object TxMainbandVerilog extends App {
-    (new ChiselStage).emitSystemVerilog(new TxMainband(16, 16, 0)
+    (new ChiselStage).emitSystemVerilog(new TxMainband(16)
     )
 }
 
 // To execute do:
 // runMain edu.berkeley.cs.ucie.digital.afe.TxMainbandVerilog 
 object RxMainbandVerilog extends App {
-    (new ChiselStage).emitSystemVerilog(new RxMainband(16, 16, 0)
+    (new ChiselStage).emitSystemVerilog(new RxMainband(16)
     )
 }
 
@@ -597,4 +430,9 @@ object TxSidebandVerilog extends App {
 
 object RxSidebandVerilog extends App {
     (new ChiselStage).emitSystemVerilog(new RxSideband(16))
+}
+
+
+object AfeFifoVerilog extends App {
+    (new ChiselStage).emitSystemVerilog(new AfeFifo())
 }
