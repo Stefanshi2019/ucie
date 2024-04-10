@@ -148,8 +148,7 @@ class SBMsgWrapper( //TODO: cp, dp, messages with data
         (rxmsg(39, 32) === code)
       }
 
-      /** send message over sideband. NOTE: keeps sending until timeout */
-      // TODO: send with data
+      /** send message over sideband. TODO: keeps sending until timeout */
       // TODO: misaligned phases with sbwrapper?
       switch(sendSubState) {
         is(SubState.SEND_OR_RECEIVE_MESSAGE_0) {

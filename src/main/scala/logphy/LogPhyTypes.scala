@@ -7,6 +7,8 @@ import chisel3.util._
 import interfaces._
 
 object LinkTrainingState extends ChiselEnum {
+  //NOTE: As mbTrain mainly does calibration of analog characteristics, it is not implemented
+  //If implemented, it should precede mbInit
   val reset, sbInit, mbInit, linkInit, active, linkError = Value
 }
 
@@ -21,6 +23,10 @@ object SBInitSubState extends ChiselEnum {
   }
 
 /** Sideband Types */
+
+object MsgSource extends ChiselEnum {
+    val PATTERN_GENERATOR, SB_MSG_WRAPPER = Value
+  }
 
 class SBExchangeMsg extends Bundle {
   val exchangeMsg = UInt(128.W)
@@ -38,6 +44,14 @@ object MessageRequestType extends ChiselEnum {
   val MSG_EXCH, MSG_REQ, MSG_RESP = Value
 }
 
+// Request output from pattern generator
+class PatternGenRequestStatus (afeParams: AfeParams) extends Bundle {
+  val status = MessageRequestStatusType()
+  // From (mb) pattern training:
+  val errorPerLane = UInt(afeParams.mbLanes.W)
+  val errorAllLane = UInt(log2Ceil(afeParams.mbLanes).W) //4. result of total lane comparison errors
+}
+
 class MessageRequest extends Bundle {
   /* val msg = UInt(max((new SBReqMsg).getWidth, (new
    * SBExchangeMsg).getWidth).W) */
@@ -47,6 +61,7 @@ class MessageRequest extends Bundle {
   val msgTypeHasData = Bool()
 }
 
+// Message output from sb msg request
 class MessageRequestStatus extends Bundle {
   val status = MessageRequestStatusType()
   val data = UInt(64.W)
@@ -61,6 +76,10 @@ object ClockModeParam extends ChiselEnum {
 }
 
 object TransmitPattern extends ChiselEnum {
-  val NO_PATTERN      = Value(0.U)
-  val CLOCK_64_LOW_32 = Value(1.U)
+  val NO_PATTERN, CLOCK_64_LOW_32, CLK_REPAIR, VAL_TRAIN,
+  MB_REVERSAL, DATA = Value //TODO: more
 }
+
+// object MainbandSel extends  ChiselEnum {
+//   val DATA, TRACK, VALID, CLK_P, CLK_N = Value
+// }

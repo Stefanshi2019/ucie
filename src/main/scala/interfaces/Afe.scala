@@ -41,8 +41,8 @@ class StandardPackageIo(lanes: Int = 16) extends Bundle {
 
 case class AfeParams(
     sbSerializerRatio: Int = 1,
-    mbSerializerRatio: Int = 16,
-    mbLanes: Int = 16,
+    mbSerializerRatio: Int = 16, //TODO: ? why 16
+    mbLanes: Int = 16, //TODO: Why not UInt
 )
 
 /** The sideband analog front-end (AFE) interface, from the perspective of the

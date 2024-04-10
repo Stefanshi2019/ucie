@@ -40,24 +40,22 @@ class LinkTrainingFSM(
   })
 
   // Method for looking up msg to msgcodes
-  def messageIsEqual(rxmsg: UInt, op: Opcode, sub: MsgSubCode, code: MsgCode): Bool = {
+  // def messageIsEqual(rxmsg: UInt, op: Opcode, sub: MsgSubCode, code: MsgCode): Bool = {
 
-        /** opcode */
-        (rxmsg(4, 0) === Opcode) &&
-        /** subcode */
-        (rxmsg(21, 14) === sub) &&
-        /** code */
-        (rxmsg(39, 32) === code)
-      }
+  //       /** opcode */
+  //       (rxmsg(4, 0) === Opcode) &&
+  //       /** subcode */
+  //       (rxmsg(21, 14) === sub) &&
+  //       /** code */
+  //       (rxmsg(39, 32) === code)
+  //     }
 
-  // Pattern generator connection Begin ---------------------------------------------------
+  // Pattern generator, sbMsgWrapper connection Begin -------------------------------
   val patternGenerator = new PatternGenerator(afeParams)
+  val patternGeneratorMb = new PatternGenerator(afeParams)
   val sbMsgWrapper = new SBMsgWrapper(afeParams)
 
-  private object MsgSource extends ChiselEnum {
-    val PATTERN_GENERATOR, SB_MSG_WRAPPER = Value
-  }
-  private val msgSource = Wire(MsgSource.PATTERN_GENERATOR)
+  private val msgSource = Wire(MsgSource.PATTERN_GENERATOR) //this msg source is for sb
 
   private object SbMsgWrapperSource extends ChiselEnum {
     val MAIN, MBINITFSM = Value
@@ -70,15 +68,15 @@ class LinkTrainingFSM(
   // io.mainbandLaneIO <> patternGenerator.io.mainbandLaneIO
 
   when(msgSource === MsgSource.PATTERN_GENERATOR) {
-    // io.mbAfe.txData <> patternGenerator.io.mbAfe.txData
-    // io.mbAfe.rxData <> patternGenerator.io.mbAfe.rxData
-    // io.sbAfe.txData <> patternGenerator.io.sbAfe.txData
-    // io.sbAfe.rxData <> patternGenerator.io.sbAfe.rxData
-    // io.mbAfe <> patternGenerator.io.mbAfe
     io.sbAfe <> patternGenerator.io.sbAfe
   }.elsewhen (msgSource === MsgSource.SB_MSG_WRAPPER) {
     io.sbAfe <> sbMsgWrapper.io.sbAfe
   }
+  
+  patternGenerator.io.patternGeneratorIO.sideband := true.B
+  io.mbAfe <> patternGeneratorMb.io.mbAfe
+  patternGeneratorMb.io.patternGeneratorIO <> mbInit.io.patternGenIo
+  patternGeneratorMb.io.patternGeneratorIO.sideband := false.B
 
 when(sbMsgSource === SbMsgWrapperSource.MAIN) {
   sbWrapperTrainIO <> sbMsgWrapper.io.trainIO
@@ -86,10 +84,12 @@ when(sbMsgSource === SbMsgWrapperSource.MAIN) {
 }.elsewhen(sbMsgSource === SbMsgWrapperSource.MBINITFSM) {
   mbInit.io.sbTrainIO <> sbMsgWrapper.io.trainIO
   mbInit.io.sbMsgHeaderIO <> sbMsgWrapper.io.msgHeaderIO
+  mbInit.io.patternGenIo <> transmitPatternStatus.io.patternGeneratorIO
 }
 
-  // Pattern generator connection End -----------------------------------------------------
+  // Pattern generator, sbMsgWrapper connection End ----------------------------------------
 
+  // States Start ---------------------------------------------------------------------
   private val currentState = RegInit(LinkTrainingState.reset)
   private val nextState = Wire(currentState)
 
@@ -103,23 +103,18 @@ when(sbMsgSource === SbMsgWrapperSource.MAIN) {
   io.mbAfe.txZpu := VecInit.fill(afeParams.mbLanes)(0.U)
   io.mbAfe.rxZ := VecInit.fill(afeParams.mbLanes)(0.U)
 
-  // Reset sub-state init Begin --------------------------------------------------------
   private val resetSubState = RegInit(ResetSubState.INIT)
   when(nextState === LinkTrainingState.reset) { //TODO: incorporate lp reset information into nextstate
     resetSubState := ResetSubState.INIT
   }
-  // Reset sub-state init End ----------------------------------------------------------
 
-  // SbInit sub-state init Begin -------------------------------------------------------
   private val sbInitSubState = RegInit(SBInitSubState.SEND_CLOCK)
   when(
     nextState === LinkTrainingState.sbInit && currentState =/= LinkTrainingState.sbInit,
   ) {
     sbInitSubState := SBInitSubState.SEND_CLOCK
   }
-  // SbInit sub-state init End ---------------------------------------------------------
 
-  // MbInit sub-state init Begin -------------------------------------------------------
   private val mbInit = Module(
     new MBInitFSM(
       linkTrainingParams,
@@ -128,7 +123,6 @@ when(sbMsgSource === SbMsgWrapperSource.MAIN) {
     ),
   )
   mbInit.reset := (nextState === LinkTrainingState.mbInit) && (currentState =/= LinkTrainingState.mbInit)
-  // MbInit sub-state init End ---------------------------------------------------------
 
   when(io.rdiInitReq === true.B) {
     currentState := LinkTrainingState.reset
@@ -136,6 +130,8 @@ when(sbMsgSource === SbMsgWrapperSource.MAIN) {
     currentState := nextState
   }
   io.active := currentState === LinkTrainingState.active
+
+  // States End ------------------------------------------------------------------
 
   switch(currentState) {
     is(LinkTrainingState.reset) {
@@ -177,11 +173,12 @@ when(sbMsgSource === SbMsgWrapperSource.MAIN) {
 
     // SbInit sub-state Begin ------------------------------------------------------------
     is(LinkTrainingState.sbInit) {
+      sbMsgSource := SbMsgWrapperSource.MAIN
 
       switch(sbInitSubState) {
         is(SBInitSubState.SEND_CLOCK) {
           patternGenerator.io.patternGeneratorIO.transmitInfo.bits.pattern := TransmitPattern.CLOCK_64_LOW_32
-          patternGenerator.io.patternGeneratorIO.transmitInfo.bits.sideband := true.B
+          // patternGenerator.io.patternGeneratorIO.transmitInfo.bits.sideband := true.B
 
           /** Timeout occurs after 8ms */
           patternGenerator.io.patternGeneratorIO.transmitInfo.bits.timeoutCycles := (
@@ -342,8 +339,9 @@ when(sbMsgSource === SbMsgWrapperSource.MAIN) {
     is(LinkTrainingState.mbInit) {
       mbAfe.txFreqSel := SpeedMode.speed4 //As per p86, mainband data rate is set to lowest supported (4GT/s)
 
-      
-      msgSource := MsgSource.SB_MSG_WRAPPER
+      msgSource := mbInit.io.msgSource
+      sbMsgSource := SbMsgWrapperSource.MBINITFSM
+
       when(mbInit.io.done.asBool) {
         nextState := Mux(
           mbInit.io.error,
