@@ -4,6 +4,7 @@ package logphy
 import chisel3._
 import chisel3.util._
 import interfaces._
+import sideband._
 
 class SBMsgWrapperTrainIO(
 ) extends Bundle {
@@ -16,8 +17,8 @@ class SBMsgWrapper( //TODO: cp, dp, messages with data
     afeParams: AfeParams,
 ) extends Module {
   val io = IO(new Bundle {
-    val trainIO = new SBMsgWrapperTrainIO
-    val msgHeaderIO = new SBMsgWrapperHeaderIO
+    val trainIO = new SBMsgWrapperTrainIO()
+    val msgHeaderIO = new SBMsgWrapperHeaderIO()
     // val laneIO = new SidebandLaneIO(afeParams)
     val sbAfe = new SidebandAfeIo(afeParams)
     // val opCode = Input(Opcode)
@@ -185,7 +186,7 @@ class SBMsgWrapper( //TODO: cp, dp, messages with data
 
           }
           when(sidebandTxWidthCoupler64.io.out.fire) {
-            nextSendSubState := Muax(
+            nextSendSubState := Mux(
               currentReqHasData,
               SubState.SEND_OR_RECEIVE_DATA_0,
               SubState.SEND_OR_RECEIVE_MESSAGE_0
@@ -252,7 +253,7 @@ class SBMsgWrapper( //TODO: cp, dp, messages with data
       }
 
       /** timeout logic */
-      timeoutCounter := timeoutCounter + 1
+      timeoutCounter := timeoutCounter + 1.U
       when(timeoutCounter === currentReqTimeoutMax) {
         nextState := State.WAIT_ACK_ERR
       }

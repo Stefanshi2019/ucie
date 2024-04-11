@@ -4,7 +4,7 @@ package logphy
 import interfaces._
 import chisel3._
 import chisel3.util._
-import sideband.{SBM, SBMessage_factory}
+import sideband._
 
 // As per spec p87, exchanged parameters during MBINIT.PARAM:
 case class MBTrainingParams(
@@ -30,11 +30,11 @@ class MBInitFSM(
 
   val io = IO(new Bundle {
     // TODO: needs trigger?
-    val sbTrainIO = new Flipped(SBMsgWrapperTrainIO) //TODO: confused about the io direction here..
+    val sbTrainIO = Flipped(new SBMsgWrapperTrainIO()) //TODO: confused about the io direction here..
     // val mbTrainIO = new MBTrainIO()
-    val sbMsgHeaderIO = new Flipped(SBMsgWrapperHeaderIO)
-    val patternGenIo = new Flipped(PatternGeneratorIO(afeParams))
-    val msgSource = Output(MsgSource)
+    val sbMsgHeaderIO = Flipped(new SBMsgWrapperHeaderIO())
+    val patternGenIo = Flipped(new PatternGeneratorIO(afeParams))
+    val msgSource = Output(MsgSource())
     val done = Output(Bool())
     val error = Output(Bool())
   })
@@ -1027,7 +1027,7 @@ class MBInitFSM(
             ) {
               nextState := State.ERR
             }.otherwise {
-              when(errorAllLane > afeParams.mbLanes.asUInt/2) {
+              when(errorAllLane > afeParams.mbLanes.asUInt/2.U) {
                 //majority lane comparisons are ok
                 reverseMbSubState := ReverseMbSubState.SEND_DONE_REQ
               }.otherwise{

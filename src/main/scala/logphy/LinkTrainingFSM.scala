@@ -2,7 +2,7 @@ package edu.berkeley.cs.ucie.digital
 package logphy
 
 import interfaces._
-import sideband.{SBM, SBMessage_factory}
+import sideband._
 
 import chisel3._
 import chisel3.util._
@@ -51,9 +51,9 @@ class LinkTrainingFSM(
   //     }
 
   // Pattern generator, sbMsgWrapper connection Begin -------------------------------
-  val patternGenerator = new PatternGenerator(afeParams)
-  val patternGeneratorMb = new PatternGenerator(afeParams)
-  val sbMsgWrapper = new SBMsgWrapper(afeParams)
+  val patternGenerator = Module(new PatternGenerator(afeParams))
+  val patternGeneratorMb = Module(new PatternGenerator(afeParams))
+  val sbMsgWrapper = Module(new SBMsgWrapper(afeParams))
 
   private val msgSource = Wire(MsgSource.PATTERN_GENERATOR) //this msg source is for sb
 
@@ -62,8 +62,8 @@ class LinkTrainingFSM(
   }
   private val sbMsgSource = Wire(SbMsgWrapperSource.MAIN)
 
-  private val sbWrapperTrainIO = RegInit(Flipped(SBMsgWrapperTrainIO)) //TODO: init value
-  private val sbWrapperMsgHeaderIO = RegInit(Flipped(SBMsgWrapperHeaderIO)) //TODO: init value
+  private val sbWrapperTrainIO = RegInit(Flipped(new SBMsgWrapperTrainIO())) //TODO: init value
+  private val sbWrapperMsgHeaderIO = RegInit(Flipped(new SBMsgWrapperHeaderIO())) //TODO: init value
 
   // io.mainbandLaneIO <> patternGenerator.io.mainbandLaneIO
 
@@ -73,10 +73,10 @@ class LinkTrainingFSM(
     io.sbAfe <> sbMsgWrapper.io.sbAfe
   }
   
-  patternGenerator.io.patternGeneratorIO.sideband := true.B
+  patternGenerator.io.patternGeneratorIO.transmitInfo.bits.sideband := true.B
   io.mbAfe <> patternGeneratorMb.io.mbAfe
   patternGeneratorMb.io.patternGeneratorIO <> mbInit.io.patternGenIo
-  patternGeneratorMb.io.patternGeneratorIO.sideband := false.B
+  patternGeneratorMb.io.patternGeneratorIO.transmitInfo.bits.sideband := false.B //Why dont assign it directly within 
 
 when(sbMsgSource === SbMsgWrapperSource.MAIN) {
   sbWrapperTrainIO <> sbMsgWrapper.io.trainIO

@@ -184,11 +184,11 @@ object MsgInfo extends ChiselEnum {
 // Bundle for transmitting packe fields from linktraining to sb
 // TODO: other fields to be incorporated?
 class SBMsgWrapperHeaderIO extends Bundle {
-  val opCode = Input(Opcode)
-  val srcid = Input(SourceID)
-  val msgCode = Input(MsgCode)
-  val msgInfo = Input(MsgInfo)
-  val msgSubCode = Input(MsgSubCode)
+  val opCode = Input(Opcode())
+  val srcid = Input(SourceID())
+  val msgCode = Input(MsgCode())
+  val msgInfo = Input(MsgInfo())
+  val msgSubCode = Input(MsgSubCode())
   val data = Input(UInt(64.W))
 }
 
