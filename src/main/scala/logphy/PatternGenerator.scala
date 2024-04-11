@@ -69,7 +69,7 @@ class PatternGenerator(
   val valTrainShiftReg = RegInit("h_f0".U) //1111_0000 on valid
   
   // Function to reverse the bits of ID
-  def reversedBinary(id: UInt): UInt = {
+  def reversedBinary(id: Int): UInt = {
     val reversedBinaryString = id.toBinaryString.reverse.padTo(8, '0').reverse
     val reversedBinaryInt = Integer.parseInt(reversedBinaryString, 2)
     reversedBinaryInt.U(8.W)
