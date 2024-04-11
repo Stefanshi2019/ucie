@@ -40,9 +40,9 @@ class StandardPackageIo(lanes: Int = 16) extends Bundle {
 }
 
 case class AfeParams(
-    sbSerializerRatio: Int = 1,
-    mbSerializerRatio: Int = 16, //TODO: ? why 16
-    mbLanes: Int = 16, //TODO: Why not UInt
+    sbSerializerRatio: Int = 64,
+    mbSerializerRatio: Int = 16,
+    mbLanes: Int = 16,
 )
 
 /** The sideband analog front-end (AFE) interface, from the perspective of the
@@ -126,97 +126,98 @@ class MainbandAfeIo(
     Decoupled(Vec(afeParams.mbLanes, Bits(afeParams.mbSerializerRatio.W))),
   )
 
-  /////////////////////
-  // impedance control
-  //
-  // Setting txZpu = txZpd = 0 sets drivers to hi-z.
-  /////////////////////
-
-  /** TX pull up impedance control.
-    *
-    * @group impedance
-    */
-  val txZpu = Output(Vec(afeParams.mbLanes, UInt(4.W)))
-
-  /** TX pull down impedance control.
-    *
-    * @group impedance
-    */
-  val txZpd = Output(Vec(afeParams.mbLanes, UInt(4.W)))
-
-  /** RX impedance control.
-    *
-    * @group impedance
-    */
-  val rxZ = Output(Vec(afeParams.mbLanes, UInt(4.W)))
-
-  /////////////////////
-  // phase control
-  /////////////////////
-
-  /** Global (per-module) phase control.
-    *
-    * @group phase
-    */
-  val txGlobalPhaseSel = Output(UInt(4.W))
-
-  /** Per-lane phase control.
-    *
-    * @group phase
-    */
-  val txLaneDeskew = Output(Vec(afeParams.mbLanes, UInt(4.W)))
-
-  /** Per-lane phase control.
-    *
-    * @group phase
-    */
-  val rxLaneDeskew = Output(Vec(afeParams.mbLanes, UInt(4.W)))
-
-  /////////////////////
-  // frequency control
-  /////////////////////
-  /** @group freq */
-  val txFreqSel = Output(SpeedMode())
-
-  /////////////////////
-  // receiver control
-  /////////////////////
-  /** Mainband receiver enable.
-    *
-    * @group receiver
-    */
-  val rxEn = Output(Bool())
-
-  /** Per-lane vref/offset cancellation control.
-    *
-    * @group receiver
-    */
-  val rxVref = Output(Vec(afeParams.mbLanes, UInt(4.W)))
-
-  /////////////////////
-  // clock control
-  /////////////////////
-  /** Clock gating control.
-    *
-    * @group clock
-    */
-  val txClockEn = Output(Bool())
-
-  /** Clock parking level.
-    *
-    * Per the UCIe spec, must alternate between high and low on subsequent clock
-    * gating events. If the link is using free running clock mode, this signal
-    * has no effect.
-    *
-    * @group clock
-    */
-  val txClockPark = Output(Bool())
-
-  /** Mainband PLL Lock.
-    *
-    * Indicates whether the mainband clock is stable.
-    *
-    * @group clock
-    */
-  val pllLock = Output(Bool())
+//  // Commentted out for testing purposes temporarily
+//  /////////////////////
+//  // impedance control
+//  //
+//  // Setting txZpu = txZpd = 0 sets drivers to hi-z.
+//  /////////////////////
+//
+//  /** TX pull up impedance control.
+//    *
+//    * @group impedance
+//    */
+//  val txZpu = Output(Vec(afeParams.mbLanes, UInt(4.W)))
+//
+//  /** TX pull down impedance control.
+//    *
+//    * @group impedance
+//    */
+//  val txZpd = Output(Vec(afeParams.mbLanes, UInt(4.W)))
+//
+//  /** RX impedance control.
+//    *
+//    * @group impedance
+//    */
+//  val rxZ = Output(Vec(afeParams.mbLanes, UInt(4.W)))
+//
+//  /////////////////////
+//  // phase control
+//  /////////////////////
+//
+//  /** Global (per-module) phase control.
+//    *
+//    * @group phase
+//    */
+//  val txGlobalPhaseSel = Output(UInt(4.W))
+//
+//  /** Per-lane phase control.
+//    *
+//    * @group phase
+//    */
+//  val txLaneDeskew = Output(Vec(afeParams.mbLanes, UInt(4.W)))
+//
+//  /** Per-lane phase control.
+//    *
+//    * @group phase
+//    */
+//  val rxLaneDeskew = Output(Vec(afeParams.mbLanes, UInt(4.W)))
+//
+//  /////////////////////
+//  // frequency control
+//  /////////////////////
+//  /** @group freq */
+//  val txFreqSel = Output(SpeedMode())
+//
+//  /////////////////////
+//  // receiver control
+//  /////////////////////
+//  /** Mainband receiver enable.
+//    *
+//    * @group receiver
+//    */
+//  val rxEn = Output(Bool())
+//
+//  /** Per-lane vref/offset cancellation control.
+//    *
+//    * @group receiver
+//    */
+//  val rxVref = Output(Vec(afeParams.mbLanes, UInt(4.W)))
+//
+//  /////////////////////
+//  // clock control
+//  /////////////////////
+//  /** Clock gating control.
+//    *
+//    * @group clock
+//    */
+//  val txClockEn = Output(Bool())
+//
+//  /** Clock parking level.
+//    *
+//    * Per the UCIe spec, must alternate between high and low on subsequent clock
+//    * gating events. If the link is using free running clock mode, this signal
+//    * has no effect.
+//    *
+//    * @group clock
+//    */
+//  val txClockPark = Output(Bool())
+//
+//  /** Mainband PLL Lock.
+//    *
+//    * Indicates whether the mainband clock is stable.
+//    *
+//    * @group clock
+//    */
+//  val pllLock = Output(Bool())
 }

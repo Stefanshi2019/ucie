@@ -1,6 +1,5 @@
 // Code your design here
-`timescale 1ns/100ps
-module AsyncFifoStefan #(
+module AsyncFifoStefanCore #(
     parameter DEPTH = 16,
     parameter WIDTH = 8
 )(
@@ -84,6 +83,9 @@ module WptrHandler #(
             g_wptr <= '0;
             b_wptr <= '0;
             full   <= '0;
+            // g_wptr <= g_wptr_next;
+            // b_wptr <= b_wptr_next;
+            // full   <= full_next;
         end else begin
             g_wptr <= g_wptr_next;
             b_wptr <= b_wptr_next;
