@@ -3,6 +3,7 @@ package logphy
 
 import chisel3._
 import chisel3.util._
+import chisel3.stage.ChiselStage
 
 case class DataWidthCouplerParams(
     val inWidth: Int = 4,
@@ -25,6 +26,9 @@ class DataWidthCoupler(params: DataWidthCouplerParams) extends Module {
   }
 
   private val currentState = RegInit(State.IDLE)
+  io.out.bits := 0.U
+  io.in.ready := false.B
+  io.out.valid := false.B
 
   if (params.inWidth > params.outWidth) {
     val ratio = params.inWidth / params.outWidth
@@ -101,4 +105,8 @@ class DataWidthCoupler(params: DataWidthCouplerParams) extends Module {
 
   }
 
+}
+
+object DataWidthCouplerVerilog extends App {
+    (new ChiselStage).emitSystemVerilog(new DataWidthCoupler(new DataWidthCouplerParams()))
 }
