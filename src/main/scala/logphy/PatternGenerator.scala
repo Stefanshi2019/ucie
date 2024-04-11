@@ -87,7 +87,7 @@ class PatternGenerator(
   val mbReverseConstVec: Vec[UInt] = VecInit(calculateMbReverseVec)
 
   val patternToTransmit = Wire(0.U(afeParams.sbSerializerRatio.W))
-  val patternToTransmitMb = Vec(afeParams.mbLanes, Wire(afeParams.mbSerializerRatio.W))
+  val patternToTransmitMb = Wire(Vec(afeParams.mbLanes, Bits(afeParams.mbSerializerRatio.W)))
   val patternDetectedCount = RegInit(0.U)
   val patternWrittenCount = RegInit(0.U)
 
@@ -108,15 +108,14 @@ class PatternGenerator(
 
   /*Width douplers: for detecting incoming sequence */
   // look up table for desired chunked output width (for 1 iteration)
-  val widthDecouplerOutWithTable = Seq(
-    TransmitPattern.CLOCK_64_LOW_32 -> 96.U,
-    TransmitPattern.CLK_REPAIR -> 24.U,
-    TransmitPattern.VAL_TRAIN -> 8.U,
-    TransmitPattern.MB_REVERSAL -> 16.U
-  )
+  val outWidth = pattern match {
+    case TransmitPattern.CLOCK_64_LOW_32 => 96
+    case TransmitPattern.CLK_REPAIR => 24
+    case TransmitPattern.VAL_TRAIN => 8
+    case TransmitPattern.MB_REVERSAL => 16
+    case _ => 16 //Default
+  }
 
-  val outWidth = MuxLookup(pattern, 0.U)(widthDecouplerOutWithTable)
-  // TODO: Does this dynamic parametrization work? If not, will have to think of other ways
   private val sidebandInWidthCoupler = new DataWidthCoupler(
     /** collect size of largest pattern */
     DataWidthCouplerParams(
