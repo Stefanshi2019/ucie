@@ -46,8 +46,15 @@ object Opcode extends ChiselEnum {
   val MessageWith64bData = Value("b11011".U(5.W))
 }
 
+object WplMsgCode extends ChiselEnum {
+  val AdvCap                   = Value(0x01.U(8.W)) // MsgInfo 0000h reserved, FFFFh stall
+  val FinCap                   = Value(0x02.U(8.W)) // MsgInfo 0000h reserved, FFFFh stall
+}
 
-
+object WplMsgSubCode extends ChiselEnum {
+  val Adaptor = Value(0x00.U(8.W)) // MsgInfo 0000h reserved, FFFFh stall
+  val CXL = Value(0x01.U(8.W)) // MsgInfo 0000h reserved, FFFFh stall
+}
   // Link training message too much, will do later, p148
 
   // Side band message definitions, refer to p146

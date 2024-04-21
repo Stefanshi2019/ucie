@@ -2,7 +2,7 @@ package edu.berkeley.cs.ucie.digital
 package sideband
 
 import chisel3._
-
+import chisel3.util._
 /** UCIe Spec 6.1 */
 class RegisterSidebandHeader extends Bundle {
   // Phase 0
@@ -48,3 +48,18 @@ class SidebandMessageHeader extends Bundle {
   val msgSubCode = MsgSubCode()
 }
 
+class SbMsgSubIO extends Bundle {
+    val handshake = Flipped(Decoupled())
+    val opcode = Input(Opcode())
+    val msgCode = Input(MsgCode())
+    val msgInfo = Input(MsgInfo())
+    val msgSubCode = Input(MsgSubCode())
+    val data0 = Input(Bits(32.W))
+    val data1 = Input(Bits(32.W))
+    val bits = Valid(Bits(64.W))  // Change this to sideband serializer ratio later
+}
+
+class SbMsgIO extends Bundle {
+    val tx = new SbMsgSubIO()
+    val rx = Flipped(new SbMsgSubIO())
+}

@@ -4,7 +4,6 @@ package afe
 import chisel3._
 import chisel3.util._ 
 import chisel3.stage.ChiselStage
-import freechips.asyncqueue._
 import interfaces._
 import chisel3.experimental.DataMirror
 

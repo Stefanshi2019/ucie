@@ -9,7 +9,7 @@ case class FdiParams(width: Int, dllpWidth: Int, sbWidth: Int)
 /** The flit-aware die-to-die interface (FDI), from the perspective of the
   * protocol layer.
   */
-class Fdi(params: FdiParams) extends Bundle {
+class Fdi_ori(params: FdiParams) extends Bundle {
 
   /** Protocol layer to Adapter data.
     *
@@ -406,4 +406,69 @@ class Fdi(params: FdiParams) extends Bundle {
     * the receiver of the credit returns.
     */
   val lpConfigCredit = Output(Bool())
+}
+
+
+class Fdi (fdiParams: FdiParams)  extends Bundle {
+//   val lclk = Input(Clock()) // Clock signal, typically not declared in this manner but included for completeness.
+
+//   // Protocol Layer to Adapter signals
+  val lpData = Decoupled3(Bits((8 * fdiParams.width).W))
+//   val lp_irdy = Output(Bool())
+//   val lp_valid = Output(Bool())
+//   val lp_data = Output(Bits(width = NBYTES.W)) // Replace 'NBYTES' with the actual byte width.
+
+//   // val lp_nop_flit = Output(Bool())
+//   // val lp_retimer_crd = Output(Bool())
+//   // val lp_corrupt_crc = Output(Bool())
+  
+//   // val lpDllp = Valid(Bits(params.dllpWidth.W)) //abnormal signal
+//   // val lp_dllp = Output(UInt(NDLLP.W)) // NDLLP needs to be defined based on your system.
+//   // val lp_dllp_valid = Output(Bool())
+//   // val lp_dllp_ofc = Output(Bool())
+//   val lp_stream = Output(UInt(8.W))
+  val lp_state_req = Output(PhyStateReq())
+  val lp_linkerror = Output(Bool())
+  val lp_rx_active_sts = Output(Bool())
+  val lp_stallack = Output(Bool())
+//   val lpConfig = Valid(Bits(params.sbWidth.W)) // abnormal signal
+//   val lp_cfg = Output(UInt(NC.W)) // NC needs to be defined as the width of your sideband interface.
+//   val lp_cfg_vld = Output(Bool())
+//   val lp_cfg_crd = Output(Bool())
+  val lp_wake_req = Output(Bool())
+
+//   // Adapter to Protocol Layer signals
+//   val pl_trdy = Input(Bool())
+  val plData = Flipped(Valid(Bits((8 * fdiParams.width).W))) // abonormal signal
+//   val pl_valid = Input(Bool())
+//   val pl_data = Input(UInt(width = NBYTES.W))
+//   // val pl_retimer_crd = Input(Bool())
+    
+//   // val plDllp = Flipped(Valid(Bits(params.dllpWidth.W))) //abnormal signal
+//   // val pl_dllp = Input(UInt(NDLLP.W))
+//   // val pl_dllp_valid = Input(Bool())
+//   // val pl_dllp_ofc = Input(Bool())
+//   val pl_stream = Input(UInt(8.W))
+  val pl_state_sts = Input(PhyState())
+  val pl_inband_pres = Input(Bool())
+//   // val pl_error = Input(Bool())
+//   // val pl_cerror = Input(Bool())
+//   // val pl_nferror = Input(Bool())
+//   // val pl_trainerror = Input(Bool())
+  val pl_rx_active_req = Input(Bool())
+//   // val pl_protocol = Input(UInt(3.W))
+//   // val pl_protocol_flitfmt = Input(UInt(4.W))
+//   // val pl_protocol_vld = Input(Bool())
+  val pl_stallreq = Input(Bool())
+//   // val pl_phyinrecenter = Input(Bool())
+//   // val pl_phyinl1 = Input(Bool())
+//   // val pl_phyinl2 = Input(Bool())
+//   // val pl_speedmode = Input(UInt(3.W))
+//   val pl_lnk_cfg = Input(UInt(3.W))
+//   val pl_clk_req = Input(Bool())
+  val pl_wake_ack = Input(Bool())
+  
+//   val pl_cfg = Input(UInt(NC.W))
+//   val pl_cfg_vld = Input(Bool())
+//   val pl_cfg_crd = Input(Bool())
 }

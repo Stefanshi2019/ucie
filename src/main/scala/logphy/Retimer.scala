@@ -7,7 +7,6 @@ import chisel3.util._
 import interfaces._
 import sideband._
 import afe._
-import freechips.asyncqueue._
 // Credit-based flow control is only required for in-package 
 // For now, assume direct transmission for off package.
 
