@@ -7,9 +7,7 @@ import chisel3.util._
 import interfaces._
 
 object LinkTrainingState extends ChiselEnum {
-  //NOTE: As mbTrain mainly does calibration of analog characteristics, it is not implemented
-  //If implemented, it should precede mbInit
-  val reset, sbInit, mbInit, linkInit, active, linkError = Value
+  val reset, sbInit, mbInit, mbTrain, linkInit, active, linkError = Value
 }
 
 object ResetSubState extends ChiselEnum {

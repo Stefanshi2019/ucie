@@ -346,9 +346,13 @@ when(sbMsgSource === SbMsgWrapperSource.MAIN) {
         nextState := Mux(
           mbInit.io.error,
           LinkTrainingState.linkError,
-          LinkTrainingState.linkInit,
+          LinkTrainingState.mbTrain,
         )
       }
+    }
+    is(LinkTrainingState.mbTrain) {
+      //NOTE: As mbTrain mainly does calibration of analog characteristics, it is not implemented
+      nextState := LinkTrainingState.linkInit
     }
     is(LinkTrainingState.linkInit) {}
     is(LinkTrainingState.active) {

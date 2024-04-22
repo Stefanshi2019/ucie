@@ -7,7 +7,7 @@ import interfaces._
 
 class SBMsgWrapperTrainIO(
 ) extends Bundle {
-  val msgReq = Flipped(Decoupled(new MessageRequest))
+  val msgReq = Flipped(Decoupled(new MessageRequest)) // This is not really used
   val msgReqStatus = Decoupled(new MessageRequestStatus)
 }
 
